@@ -6,7 +6,7 @@
 /* ============================================================
  * KEY BINDINGS (rebindable for P1; pads use the fixed layout)
  * ============================================================ */
-const DEFAULT_BINDS = { left: "ArrowLeft", right: "ArrowRight", down: "ArrowDown", rotateCW: "Space", hardDrop: "ArrowUp", rotateCCW: "KeyZ", hold: "KeyC", pause: "KeyP", settings: "KeyO" };
+const DEFAULT_BINDS = { left: "ArrowLeft", right: "ArrowRight", down: "ArrowDown", rotateCW: "Space", hardDrop: "ArrowUp", rotateCCW: "KeyZ", hold: "KeyC", pause: "KeyP", settings: "KeyO", restart: "KeyR" };
 let binds = loadBinds();
 
 function loadBinds() {
@@ -15,12 +15,12 @@ function loadBinds() {
 }
 function saveBinds() { try { localStorage.setItem("tetris-binds", JSON.stringify(binds)); } catch {} }
 
-// Fixed gamepad layout (standard mapping): [A]=start, [B]=restart, [X]=settings,
+// Fixed gamepad layout (W3C standard indices): [A]=start, [B]=restart, [X]=settings,
 // [Y]=hold, [LB]=rotate CCW, [RB]=hard drop, [Back]=pause, [Start]=rotate CW.
 // A/B are contextual: A confirms in menus and rotates left in play;
 // B goes back in menus and rotates right in play.
 // dpad/up/down/left/right = move + soft drop.
-const PAD_BUTTONS = { 0: "start", 1: "restart", 2: "settings", 3: "hold", 4: "rotateCCW", 5: "hardDrop", 6: "pause", 7: "rotateCW" };
+const PAD_BUTTONS = { 0: "start", 1: "restart", 2: "settings", 3: "hold", 4: "rotateCCW", 5: "hardDrop", 8: "pause", 9: "rotateCW" };
 
 // Soft-drop repeat rate while ArrowDown / dpad-down is held.
 const SOFT_DROP_MS = 40;
@@ -28,7 +28,7 @@ const SOFT_DROP_MS = 40;
 /* ============================================================
  * SETTINGS OVERLAY LABELS (key rebinding table)
  * ============================================================ */
-const ACTION_LABELS = { left: "Move Left", right: "Move Right", down: "Soft Drop", rotateCW: "Rotate CW", hardDrop: "Hard Drop", rotateCCW: "Rotate CCW", hold: "Hold", pause: "Pause", settings: "Settings" };
+const ACTION_LABELS = { left: "Move Left", right: "Move Right", down: "Soft Drop", rotateCW: "Rotate CW", hardDrop: "Hard Drop", rotateCCW: "Rotate CCW", hold: "Hold", pause: "Pause", settings: "Settings", restart: "Back / Rotate Right" };
 
 const KEY_NAMES = {
   ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓", Space: "Space", Enter: "Enter", Escape: "Esc", Tab: "Tab", Backspace: "Bksp",
@@ -199,11 +199,11 @@ window.addEventListener("keydown", (e) => {
 
   // WAITING: if the keyboard hasn't claimed a slot yet, any key claims the
   // lowest free slot and joins with it.
-  if (state === State.WAITING && inputSlot.keyboard === null) {
+  if (state === State.WAITING && inputSlot.keyboard === null && e.key !== "Escape") {
     const slot = claimSlot("keyboard");
     if (slot !== null) {
       e.preventDefault();
-      joinSlot(slot, "keyboard");
+      joinSlot(slot);
       return;
     }
     // Every slot is taken: fall through (a bound "restart" key still works).
@@ -264,7 +264,6 @@ function pollGamepads() {
           slotOwner[slot] = null;
           inputSlot[inputId] = null;
           players[slot].ready = false;
-          players[slot].source = "";
           showWaiting();
         }
         if (slot !== null) {
@@ -284,10 +283,8 @@ function pollGamepads() {
 
     // Settings capture: only P1's pad can be rebinded.
     if (settingsOpen) {
-      if (i === 0 && capture?.input === "gamepad") {
-        const idx = pressed.findIndex((p, j) => p && !ps.prevButtons[j]);
-        if (idx >= 0) tryBind(`Pad${i}:${idx}`);
-      }
+      // B (button 1) closes settings, mirroring Esc on keyboard.
+      if (pressed[1] && !ps.prevButtons[1]) closeSettings();
       ps.prevButtons = pressed;
       continue; // no gameplay input while settings is open
     }
@@ -314,7 +311,7 @@ function pollGamepads() {
       const anyPressed = pressed.some((p, j) => p && !ps.prevButtons[j]);
       if (anyPressed) {
         const slot = claimSlot(inputId);
-        if (slot !== null) { joinSlot(slot, "pad"); joinedNow = true; }
+        if (slot !== null) { joinSlot(slot); joinedNow = true; }
       }
     }
 

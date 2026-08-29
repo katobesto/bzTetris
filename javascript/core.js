@@ -25,7 +25,6 @@ function makePlayer(slot) {
     slot,
     alive: true,
     ready: false,           // joined the match (WAITING screen)
-    source: "",             // "keyboard" | "pad" — how this player joined
     outAt: null,            // timestamp when this player went out
     board: emptyBoard(),
     piece: null,
@@ -45,7 +44,7 @@ function emptyBoard() { return Array.from({ length: ROWS }, () => new Array(COLS
 
 // Reset one player's game state (keeps DOM refs). Used at match start.
 function resetPlayer(pl) {
-  pl.alive = true; pl.ready = false; pl.source = ""; pl.outAt = null;
+  pl.alive = true; pl.ready = false; pl.outAt = null;
   pl.board = emptyBoard();
   pl.piece = null; pl.bag = []; pl.queue = []; pl.heldType = null; pl.canHold = true;
   pl.score = 0; pl.level = 1; pl.linesCleared = 0;
@@ -223,12 +222,11 @@ function confirmMenu() {
 }
 
 // A player joins the match. When everyone is ready, start it.
-function joinSlot(slot, source) {
+function joinSlot(slot) {
   if (state !== State.WAITING || slot >= players.length) return;
   const pl = players[slot];
   if (pl.ready) return;
   pl.ready = true;
-  pl.source = source;
   showWaiting(); // refresh the slot list
   if (players.every(p => p.ready)) startMatch();
 }
@@ -246,7 +244,7 @@ function startMatch() {
 function updateCountdown(dtMs) {
   countdownT -= dtMs;
   const n = Math.max(0, Math.ceil(countdownT / 1000));
-  if (n !== lastCdShown && n >= 1) setCountdownNumber(n);
+  if (n !== lastCdShown && n >= 1) { setCountdownNumber(n); lastCdShown = n; }
   if (countdownT <= 0) {
     hideScreen();
     state = State.PLAYING;

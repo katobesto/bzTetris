@@ -77,6 +77,7 @@ function buildColumns(n) {
     drawNext(pl);
     drawHold(pl);
   }
+  lastDotSig = "";
   updatePadDots();
 }
 
@@ -242,10 +243,20 @@ function updateMenuPadsLine() {
     : `Controllers connected: ${n}`;
 }
 
+function slotSourceLabel(slot) {
+  const owner = slotOwner[slot];
+  if (owner === "keyboard") return "Keyboard";
+  if (owner && owner.startsWith("pad")) {
+    const idx = parseInt(owner.slice(3));
+    return padNames[idx] || `Controller ${idx + 1}`;
+  }
+  return `P${slot + 1}`;
+}
+
 function showWaiting() {
   screenKind = "waiting";
   const rows = players.map(pl => {
-    const src = pl.slot === 0 ? "Keyboard" : (padNames[pl.slot - 1] || `Controller ${pl.slot}`);
+    const src = slotSourceLabel(pl.slot);
     const st = pl.ready
       ? '<span class="slot-ready">READY</span>'
       : '<span class="slot-waiting">waiting\u2026</span>';
@@ -293,7 +304,7 @@ function showEndScreen(kind, winner) {
     <div class="screen-inner">
       <h2 class="screen-title ${kind}">${title}</h2>
       <div class="score-list">${rows}</div>
-      <p class="screen-hint">Press Enter, R or Start to return to the menu</p>
+      <p class="screen-hint">Press A, B or Enter to return to the menu</p>
     </div>`;
   screenEls = {};
   screenEl.classList.remove("hidden");
@@ -316,13 +327,13 @@ function refreshScreen() {
  * ============================================================ */
 let lastDotSig = "";
 function updatePadDots() {
-  const sig = padNames.join("|");
+  const sig = padNames.join("|") + "|" + slotOwner.join(",");
   if (sig === lastDotSig) return;
   lastDotSig = sig;
   for (const pl of players) {
     if (!pl.elPadDot) continue;
-    // P1 is keyboard (always on); P2+ light up when their controller connects.
-    const on = pl.slot === 0 || !!padNames[pl.slot - 1];
+    const owner = slotOwner[pl.slot];
+    const on = owner === "keyboard" || (owner && owner.startsWith("pad") && !!padNames[parseInt(owner.slice(3))]);
     pl.elPadDot.classList.toggle("on", on);
   }
 }
