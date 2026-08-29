@@ -59,7 +59,7 @@ function resetPlayer(pl) {
  * ============================================================ */
 function pieceCells(piece) {
   const cells = [];
-  const m = SHAPES[piece.type];
+  const m = ROTATIONS[piece.type][piece.rot];
   for (let r = 0; r < m.length; r++)
     for (let c = 0; c < m[r].length; c++)
       if (m[r][c]) cells.push([piece.x + c, piece.y + r]);
@@ -120,7 +120,7 @@ function tryRotate(pl, dir) {
   const kicks = (piece.type === "I" ? KICKS_I : KICKS_JLSTZ)[from + to] || [[0, 0]];
   for (const [kx, ky] of kicks) {
     // Kick tables use +y up; canvas uses +y down -> flip y.
-    const cells = pieceCells({ ...piece, x: piece.x + kx, y: piece.y - ky });
+    const cells = pieceCells({ ...piece, rot: to, x: piece.x + kx, y: piece.y - ky });
     if (!collidesAt(pl, cells)) {
       piece.rot = to;
       piece.x += kx;
@@ -214,6 +214,7 @@ function changeMenuCount(delta) {
 
 function confirmMenu() {
   if (state !== State.MENU) return;
+  resetSlotAssignment(); // fresh slot claims for this match
   players.length = 0;
   for (let i = 0; i < menuCount; i++) players.push(makePlayer(i));
   buildColumns(menuCount); // rebuild DOM/canvases sized for this player count
@@ -270,6 +271,7 @@ function returnToMenu() {
   stopMusic();
   for (const pl of players) { pl.particles.length = 0; pl.popups.length = 0; }
   shake.t = 0; shake.mag = 0;
+  resetSlotAssignment(); // clear slot claims for the next match
   state = State.MENU;
   showMenu(menuCount);
 }

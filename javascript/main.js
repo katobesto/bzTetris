@@ -39,7 +39,9 @@ function update(dt, now) {
   if (state !== State.PLAYING) return;
 
   for (const pl of players) {
-    if (!pl.alive || !pl.piece) continue; // dead players keep their frozen board + effects
+    // Skip dead players, but keep ticking a player mid line-clear: during the
+    // clear animation pl.piece is null yet pl.clearing must still advance.
+    if (!pl.alive || (!pl.piece && !pl.clearing)) continue;
     updatePlayer(pl, dt, now);
   }
 }

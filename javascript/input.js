@@ -1,5 +1,5 @@
-// input.js — Keyboard (P1) + up to 4 gamepads, key rebinding, settings overlay.
-// Every action is dispatched per player slot: keyboard -> slot 0, pad i -> slot i+1.
+// input.js — Keyboard + up to 4 gamepads, key rebinding, settings overlay.
+// Inputs claim player slots dynamically in activation order (see claimSlot).
 
 "use strict";
 
@@ -15,7 +15,10 @@ function loadBinds() {
 }
 function saveBinds() { try { localStorage.setItem("tetris-binds", JSON.stringify(binds)); } catch {} }
 
-// Fixed gamepad layout: [A]=start/join, [B]=back/settings, [X]=hold, [Y]=rotate CCW,
+// Fixed gamepad layout (standard mapping): [A]=start, [B]=restart, [X]=settings,
+// [Y]=hold, [LB]=rotate CCW, [RB]=hard drop, [Back]=pause, [Start]=rotate CW.
+// A/B are contextual: A confirms in menus and rotates left in play;
+// B goes back in menus and rotates right in play.
 // dpad/up/down/left/right = move + soft drop.
 const PAD_BUTTONS = { 0: "start", 1: "restart", 2: "settings", 3: "hold", 4: "rotateCCW", 5: "hardDrop", 6: "pause", 7: "rotateCW" };
 
@@ -89,24 +92,50 @@ function softDropStep(pl) {
 }
 
 /* ============================================================
+ * DYNAMIC SLOT ASSIGNMENT — inputs claim slots in activation order.
+ * slotOwner[slot] = "keyboard" | "pad0".."pad3" | null
+ * inputSlot[inputId] = slot | null
+ * ============================================================ */
+const slotOwner = [null, null, null, null];
+const inputSlot = { keyboard: null, pad0: null, pad1: null, pad2: null, pad3: null };
+
+function resetSlotAssignment() {
+  for (let s = 0; s < slotOwner.length; s++) slotOwner[s] = null;
+  inputSlot.keyboard = null;
+  inputSlot.pad0 = null; inputSlot.pad1 = null; inputSlot.pad2 = null; inputSlot.pad3 = null;
+  clearAllHelds(); // stale directions must not carry into the next match
+  for (const ps of padState) { ps.holds.left = ps.holds.right = ps.holds.down = false; }
+}
+
+// Claim the lowest free slot for an input (idempotent per input).
+// Returns the slot, or null when every slot is taken.
+function claimSlot(inputId) {
+  if (inputSlot[inputId] !== null) return inputSlot[inputId];
+  for (let s = 0; s < players.length; s++) {
+    if (slotOwner[s] === null) {
+      slotOwner[s] = inputId;
+      inputSlot[inputId] = s;
+      return s;
+    }
+  }
+  return null;
+}
+
+/* ============================================================
  * ACTION DISPATCH — one entry point for keyboard and pads.
  * ============================================================ */
 function dispatchAction(slot, action) {
-  if (slot >= players.length) return;
-  const pl = players[slot];
-
   switch (state) {
     case State.MENU:
-      // Only P1 drives the menu.
-      if (slot !== 0) return;
+      // Any input can drive the menu (the slot is irrelevant here).
       if (action === "left") changeMenuCount(-1);
       else if (action === "right") changeMenuCount(1);
-      else if (action === "start" || action === "restart" || action === "Enter") confirmMenu();
+      else if (action === "start" || action === "Enter") confirmMenu(); // B is back-only, never confirms
       else if (action === "settings") openSettings();
       return;
 
     case State.WAITING:
-      joinSlot(slot, slot === 0 ? "keyboard" : "pad");
+      // Joining is handled by the input handlers (claimSlot + joinSlot).
       // B / R goes back to the menu.
       if (action === "restart") returnToMenu();
       return;
@@ -114,32 +143,39 @@ function dispatchAction(slot, action) {
     case State.COUNTDOWN:
       return; // no input during the countdown
 
-    case State.PLAYING:
-      if (!pl.alive) return;
-      switch (action) {
-        case "left": pressDir(slot, "left"); break;
-        case "right": pressDir(slot, "right"); break;
-        case "down": pressDir(slot, "down"); break;
-        case "rotateCW": tryRotate(pl, 1); break;
-        case "rotateCCW": tryRotate(pl, -1); break;
-        case "hardDrop": hardDrop(pl); break;
-        case "hold": doHold(pl); break;
-        case "pause": pauseGame(); break;
-        case "settings": if (slot === 0) openSettings(); break; // settings is P1-only
-        case "restart": returnToMenu(); break; // abandon the match, back to menu
+    default: {
+      if (slot >= players.length) return;
+      const pl = players[slot];
+      switch (state) {
+        case State.PLAYING:
+          if (!pl.alive) return;
+          switch (action) {
+            case "left": pressDir(slot, "left"); break;
+            case "right": pressDir(slot, "right"); break;
+            case "down": pressDir(slot, "down"); break;
+            case "start": tryRotate(pl, -1); break; // A: rotate left
+            case "restart": tryRotate(pl, 1); break; // B: rotate right
+            case "rotateCW": tryRotate(pl, 1); break;
+            case "rotateCCW": tryRotate(pl, -1); break;
+            case "hardDrop": hardDrop(pl); break;
+            case "hold": doHold(pl); break;
+            case "pause": pauseGame(); break;
+            case "settings": if (slot === 0) openSettings(); break; // settings is P1-only
+          }
+          return;
+
+        case State.PAUSED:
+          if (action === "pause" || action === "start") resumeGame();
+          else if (action === "restart") returnToMenu();
+          return;
+
+        case State.GAMEOVER:
+        case State.WINNER:
+          // Any player's Start/R (or P1's Enter) returns to the menu.
+          if (action === "start" || action === "restart" || action === "Enter") returnToMenu();
+          return;
       }
-      return;
-
-    case State.PAUSED:
-      if (action === "pause" || action === "start") resumeGame();
-      else if (action === "restart") returnToMenu();
-      return;
-
-    case State.GAMEOVER:
-    case State.WINNER:
-      // Any player's Start/R (or P1's Enter) returns to the menu.
-      if (action === "start" || action === "restart" || action === "Enter") returnToMenu();
-      return;
+    }
   }
 }
 
@@ -161,11 +197,16 @@ window.addEventListener("keydown", (e) => {
     return;
   }
 
-  // WAITING: any key joins P1's slot.
-  if (state === State.WAITING && !players[0]?.ready) {
-    e.preventDefault();
-    joinSlot(0, "keyboard");
-    return;
+  // WAITING: if the keyboard hasn't claimed a slot yet, any key claims the
+  // lowest free slot and joins with it.
+  if (state === State.WAITING && inputSlot.keyboard === null) {
+    const slot = claimSlot("keyboard");
+    if (slot !== null) {
+      e.preventDefault();
+      joinSlot(slot, "keyboard");
+      return;
+    }
+    // Every slot is taken: fall through (a bound "restart" key still works).
   }
 
   // Esc is hardwired: pause/resume in game, back-to-menu everywhere else.
@@ -181,36 +222,54 @@ window.addEventListener("keydown", (e) => {
   if (!action) return;
   e.preventDefault(); // stop page scroll on bound keys
   if (e.repeat) return;
-  dispatchAction(0, action);
+
+  // MENU: any input drives the menu (slot is irrelevant).
+  // Otherwise the keyboard controls the slot it claimed in WAITING.
+  const slot = state === State.MENU ? 0 : inputSlot.keyboard;
+  if (slot === null) return; // keyboard never joined; it controls no player
+  dispatchAction(slot, action);
 });
 
 window.addEventListener("keyup", (e) => {
-  for (const dir of ["left", "right", "down"]) if (binds[dir] === e.code) releaseDir(0, dir);
+  const slot = inputSlot.keyboard;
+  if (slot === null) return;
+  for (const dir of ["left", "right", "down"]) if (binds[dir] === e.code) releaseDir(slot, dir);
 });
 
 /* ============================================================
- * GAMEPADS — up to 4 pads; pad i controls slot i+1.
+ * GAMEPADS — up to 4 pads; each pad claims a player slot
+ * dynamically in activation order (see claimSlot).
  * P1's pad (index 0) is the one that can be captured in settings.
  * ============================================================ */
 const PAD_DEADZONE = 0.5;
 const padNames = ["", "", "", ""];
 let connectedPads = 0;
-const padState = Array.from({ length: 4 }, () => ({ g: null, prevButtons: [], holds: { left: false, right: false, down: false } }));
+const padState = Array.from({ length: 4 }, () => ({ g: null, prevButtons: [], holds: { left: false, right: false, down: false }, menuLeft: false, menuRight: false }));
 
 function pollGamepads() {
   const list = navigator.getGamepads ? Array.from(navigator.getGamepads()) : [];
   let count = 0;
 
-  for (let i = 0; i < Math.max(4, list.length); i++) {
+  for (let i = 0; i < padState.length; i++) { // only 4 pads are ever used; ignore the rest
     const g = list[i] || null;
     const ps = padState[i];
-    const slot = i + 1;
+    const inputId = "pad" + i;
 
     if (!g) {
-      if (ps.g) { // disconnected: drop name and held directions
+      if (ps.g) { // disconnected: drop name, held directions, and any claimed slot
         ps.g = null; ps.prevButtons = []; ps.name = "";
         padNames[i] = "";
-        releaseDir(slot, "left"); releaseDir(slot, "right"); releaseDir(slot, "down");
+        const slot = inputSlot[inputId];
+        if (state === State.WAITING && slot !== null) {
+          slotOwner[slot] = null;
+          inputSlot[inputId] = null;
+          players[slot].ready = false;
+          players[slot].source = "";
+          showWaiting();
+        }
+        if (slot !== null) {
+          releaseDir(slot, "left"); releaseDir(slot, "right"); releaseDir(slot, "down");
+        }
       }
       continue;
     }
@@ -233,15 +292,36 @@ function pollGamepads() {
       continue; // no gameplay input while settings is open
     }
 
-    // WAITING: any button press joins this pad's slot.
-    let joinedNow = false;
-    if (state === State.WAITING && slot < players.length && !players[slot]?.ready) {
-      const anyPressed = pressed.some((p, j) => p && !ps.prevButtons[j]);
-      if (anyPressed) { joinSlot(slot, "pad"); joinedNow = true; }
+    // MENU: any pad drives the menu (slot is irrelevant).
+    if (state === State.MENU) {
+      const leftNow = g.axes[2] < -PAD_DEADZONE || !!g.buttons[14]?.pressed;
+      const rightNow = g.axes[2] > PAD_DEADZONE || !!g.buttons[15]?.pressed;
+      if (leftNow && !ps.menuLeft) dispatchAction(0, "left");
+      if (rightNow && !ps.menuRight) dispatchAction(0, "right");
+      ps.menuLeft = leftNow;
+      ps.menuRight = rightNow;
+      for (let b = 0; b < pressed.length; b++) {
+        const action = PAD_BUTTONS[b];
+        if (action && pressed[b] && !ps.prevButtons[b]) dispatchAction(0, action);
+      }
+      ps.prevButtons = pressed;
+      continue;
     }
 
-    // Edge-triggered actions.
-    if (!joinedNow) {
+    // WAITING: any button press claims the next free slot for this pad.
+    let joinedNow = false;
+    if (state === State.WAITING && inputSlot[inputId] === null) {
+      const anyPressed = pressed.some((p, j) => p && !ps.prevButtons[j]);
+      if (anyPressed) {
+        const slot = claimSlot(inputId);
+        if (slot !== null) { joinSlot(slot, "pad"); joinedNow = true; }
+      }
+    }
+
+    const slot = inputSlot[inputId];
+
+    // Edge-triggered actions (only for pads that own a slot).
+    if (!joinedNow && slot !== null) {
       for (let b = 0; b < pressed.length; b++) {
         const action = PAD_BUTTONS[b];
         if (action && pressed[b] && !ps.prevButtons[b]) dispatchAction(slot, action);
@@ -250,15 +330,17 @@ function pollGamepads() {
     ps.prevButtons = pressed;
 
     // Held directions (dpad / left stick). pressDir/releaseDir guard on state.
-    const want = {
-      left: g.axes[2] < -PAD_DEADZONE || !!g.buttons[14]?.pressed,
-      right: g.axes[2] > PAD_DEADZONE || !!g.buttons[15]?.pressed,
-      down: g.axes[3] > PAD_DEADZONE || !!g.buttons[13]?.pressed,
-    };
-    for (const d of ["left", "right", "down"]) {
-      if (want[d] && !ps.holds[d]) pressDir(slot, d);
-      else if (!want[d] && ps.holds[d]) releaseDir(slot, d);
-      ps.holds[d] = want[d];
+    if (slot !== null) {
+      const want = {
+        left: g.axes[2] < -PAD_DEADZONE || !!g.buttons[14]?.pressed,
+        right: g.axes[2] > PAD_DEADZONE || !!g.buttons[15]?.pressed,
+        down: g.axes[3] > PAD_DEADZONE || !!g.buttons[13]?.pressed,
+      };
+      for (const d of ["left", "right", "down"]) {
+        if (want[d] && !ps.holds[d]) pressDir(slot, d);
+        else if (!want[d] && ps.holds[d]) releaseDir(slot, d);
+        ps.holds[d] = want[d];
+      }
     }
   }
 

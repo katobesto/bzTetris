@@ -104,6 +104,18 @@ function rotateMatrix(m, dir) {
   return out;
 }
 
+// Precompute all four SRS rotation states for each piece, indexed by ROT_ORDER state.
+// pieceCells() looks the active matrix up here so rotation actually changes the shape.
+const ROTATIONS = {};
+for (const type of Object.keys(SHAPES)) {
+  ROTATIONS[type] = {};
+  let m = SHAPES[type];
+  for (const st of ROT_ORDER) {
+    ROTATIONS[type][st] = m;
+    m = rotateMatrix(m, 1); // step clockwise to build the next state
+  }
+}
+
 function spawnX(type) {
   if (type === "O") return 4;
   return 3; // width-3 and width-4 pieces
