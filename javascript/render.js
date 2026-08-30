@@ -36,28 +36,51 @@ function visibleViewport() {
   return { w: window.innerWidth, h: window.innerHeight };
 }
 
-// Scale factor for the board so it fits the visible viewport.
+// Players that should get a visible column. Local play: everyone. Online:
+// only the slots that actually have a player in the room (empty slots are
+// spectators — no column, so the present players' boards stay large enough
+// to read on a phone/tablet).
+function visiblePlayers() {
+  if (!online) return players.slice();
+  return players.filter(pl => onlinePlayers.some(p => p.slot === pl.slot));
+}
+
+// Scale factor for the board so it fits the visible viewport BOTH vertically
+// and horizontally.
 //  - Uses the visible viewport (not window.innerHeight) so the board fits on
 //    tablets in landscape where the OS bars / browser chrome shrink the
 //    visible area (a landscape tablet is wide, so a width-based check would
 //    miss it — the constraint is the short visible height).
 //  - When the touch pad is open (body.pad-open) the game area is zoomed to
 //    80% to leave room for the controls at the bottom.
-//  - Returns 1 (no shrink) whenever the board already fits.
+//  - Width: all `n` columns must fit side by side, so a 2-player online match
+//    gets wider boards than a 4-player one (fewer columns = more room each).
+//  - Returns 1 (no shrink) whenever the board already fits both ways.
 function boardCellScale(n) {
   const base = CELL_BY_COUNT[n] || 21;
-  const { h } = visibleViewport();
+  const miniW = MINI_W_BY_COUNT[n] || 72;
+  const { w, h } = visibleViewport();
   const padOpen = document.body.classList.contains("pad-open");
   const zoom = padOpen ? 0.8 : 1; // 80% zoom when the pad is shown
   const reserve = padOpen ? 290 : 140; // title + stats + header (+ pad when open)
-  const avail = Math.max(160, (h - reserve) * zoom);
-  return Math.min(1, avail / (ROWS * base));
+  const availH = Math.max(160, (h - reserve) * zoom);
+  const scaleH = Math.min(1, availH / (ROWS * base));
+
+  // Horizontal fit: n columns of (board + mini) plus the fixed gaps/padding.
+  const fixedPerCol = 30; // col-body gap + column padding (approx)
+  const gap = 16;          // .game-row gap between columns
+  const availW = Math.max(200, w - 24); // 24px page margin
+  const scaleW = Math.min(1, (availW - n * fixedPerCol - (n - 1) * gap) / (n * (COLS * base + miniW)));
+
+  return Math.min(scaleH, scaleW);
 }
 let lastBoardScale = 0;
 
-function buildColumns(n) {
+function buildColumns() {
   const wrap = document.getElementById("columns");
   wrap.innerHTML = "";
+  const vis = visiblePlayers();
+  const n = vis.length;
   const scale = Math.round(boardCellScale(n) * 100) / 100;
   lastBoardScale = scale;
   const cell = Math.max(12, Math.floor((CELL_BY_COUNT[n] || 21) * scale));
@@ -65,9 +88,8 @@ function buildColumns(n) {
   const slotH = Math.max(30, Math.floor((SLOT_H_BY_COUNT[n] || 48) * scale));
   const miniW = Math.max(40, Math.floor((MINI_W_BY_COUNT[n] || 72) * scale));
 
-  for (let i = 0; i < n; i++) {
-    const pl = players[i];
-    if (!pl) continue;
+  for (const pl of vis) {
+    const i = pl.slot; // stable id per slot (works for local + online)
     pl.cell = cell; pl.miniCell = mini; pl.nextSlotH = slotH;
     const label = (online && pl.name) ? pl.name : ("P" + (i + 1));
 
@@ -294,7 +316,7 @@ function showHome() {
   screenKind = "home";
   screenEl.innerHTML = `
     <div class="screen-inner">
-      <h2 class="screen-title">TETRIS</h2>
+      <h2 class="screen-title">BZTETRIS</h2>
       <div class="home-buttons">
         <button class="btn home-btn" id="homeLocal">Juego local</button>
         <button class="btn home-btn" id="homeOnline">Juego online</button>

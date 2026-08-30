@@ -308,7 +308,7 @@ function setPadVisible(want) {
     for (const d of ["left", "right", "down"]) releaseDir(s, d);
   }
   // Rebuild the board so the 80% zoom (or full size) is applied.
-  if (typeof buildColumns === "function") buildColumns(players.length);
+  if (typeof buildColumns === "function") buildColumns();
 }
 
 function updateTouchpad() {

@@ -232,7 +232,7 @@ function finalizeClearing(pl) {
   }
 
   lineExplosion(pl, rows, n === 4);
-  const labels = ["", "+100", "+300 DOUBLE!", "+500 TRIPLE!", "+800 TETRIS!"];
+  const labels = ["", "+100", "+300 DOUBLE!", "+500 TRIPLE!", "+800 BZTETRIS!"];
   addPopup(pl, (n > 1 ? labels[n] : "+" + LINE_SCORES[1]) , COLS * pl.cell / 2, ROWS * pl.cell * 0.3, n === 4 ? 34 : 26, n === 4 ? "#ffd60a" : "#ffffff");
   if (n >= 2) triggerShake(n === 4 ? 7 : 4, n === 4 ? 260 : 150);
 
@@ -382,7 +382,7 @@ function setupOnlineMatch() {
     pl.remote = i !== mySlot; // remote players are rendered from snapshots
     players.push(pl);
   }
-  buildColumns(4); // always 4 columns online (empty slots show as idle)
+  buildColumns(); // only the slots that have a player (empty slots = no column)
   for (const pl of players) resetPlayer(pl);
   shake.t = 0; shake.mag = 0;
   state = State.COUNTDOWN;
@@ -406,7 +406,7 @@ function confirmMenu() {
   resetSlotAssignment(); // fresh slot claims for this match
   players.length = 0;
   for (let i = 0; i < menuCount; i++) players.push(makePlayer(i));
-  buildColumns(menuCount); // rebuild DOM/canvases sized for this player count
+  buildColumns(); // rebuild DOM/canvases sized for this player count
   state = State.WAITING;
   showWaiting();
 }
@@ -483,7 +483,7 @@ function returnHome() {
   // Reset to a single idle board behind the home screen.
   players.length = 0;
   players.push(makePlayer(0));
-  buildColumns(1);
+  buildColumns();
   state = State.HOME;
   showHome();
 }

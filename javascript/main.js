@@ -89,7 +89,7 @@ function updatePlayer(pl, dt, now) {
  * BOOT — build the initial (empty) columns behind the home screen and start.
  * ============================================================ */
 players.push(makePlayer(0)); // placeholder so an empty board shows behind the home screen
-buildColumns(1);
+buildColumns();
 connectNet();   // open the WebSocket so online play is ready (net.js)
 state = State.HOME;
 showHome();
@@ -101,10 +101,11 @@ requestAnimationFrame(frame);
  * when the computed scale actually changes, so it's cheap.
  * ============================================================ */
 function onViewportResize() {
-  const s = boardCellScale(players.length);
+  const n = (typeof visiblePlayers === "function") ? visiblePlayers().length : players.length;
+  const s = boardCellScale(n);
   if (Math.abs(s - lastBoardScale) < 0.01) return;
   lastBoardScale = s;
-  buildColumns(players.length);
+  buildColumns();
 }
 window.addEventListener("resize", onViewportResize);
 // visualViewport fires when the address bar / OS bars change the visible

@@ -61,14 +61,16 @@ const dom = new JSDOM(html, {
 const { window } = dom;
 const { document } = window;
 
-// ---- 1. boardCellScale behavior (based on VISIBLE height, not width) ----
-// iPhone 14 portrait (390x844): board (540px) fits -> no shrink.
+// ---- 1. boardCellScale behavior (fits BOTH visible height AND width) ----
+// iPhone 14 portrait (390x844): two boards side by side (716px) don't fit the
+// 390px width -> width-limited shrink (this is the new behavior).
 const s2 = window.eval("boardCellScale(2)");
-ok(s2 === 1, `boardCellScale(2) on 390x844 = ${s2} (fits, no shrink)`);
+ok(s2 < 1, `boardCellScale(2) on 390x844 = ${s2.toFixed(3)} < 1 (width-limited, 2 boards don't fit 390px)`);
+// Fewer players = wider boards: 2 players scale bigger than 4 on the same phone.
 const s4 = window.eval("boardCellScale(4)");
-ok(s4 === 1, `boardCellScale(4) on 390x844 = ${s4} (fits, no shrink)`);
+ok(s2 > s4, `fewer players = bigger boards: 2p ${s2.toFixed(3)} > 4p ${s4.toFixed(3)}`);
 
-// Small phone 360x640: visible height too short -> shrink.
+// Small phone 360x640: still shrinks (both height and width are tight).
 Object.defineProperty(window, "innerWidth", { value: 360, configurable: true });
 Object.defineProperty(window, "innerHeight", { value: 640, configurable: true });
 const s2small = window.eval("boardCellScale(2)");
@@ -76,26 +78,27 @@ ok(s2small < 1, `boardCellScale(2) on 360x640 = ${s2small.toFixed(3)} < 1 (shrin
 
 // Tablet in LANDSCAPE (1024x768) with OS bars eating the visible area:
 // window.innerHeight is 768 but visualViewport reports only 640 visible.
-// The old width-based check (>700 => no shrink) missed exactly this case.
+// Width is plenty (1024), so the SHORT VISIBLE HEIGHT is the constraint.
 Object.defineProperty(window, "innerWidth", { value: 1024, configurable: true });
 Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
 window.visualViewport = { width: 1024, height: 640 };
 const sTab = window.eval("boardCellScale(2)");
-ok(sTab < 1, `boardCellScale(2) on 1024x768 tablet (640 visible) = ${sTab.toFixed(3)} < 1 (fits visible area)`);
+ok(sTab < 1, `boardCellScale(2) on 1024x768 tablet (640 visible) = ${sTab.toFixed(3)} < 1 (height-limited, fits visible area)`);
 // Without the OS bars (full 768 visible) the board fits -> no shrink.
 window.visualViewport = { width: 1024, height: 768 };
 const sTabFull = window.eval("boardCellScale(2)");
 ok(sTabFull === 1, `boardCellScale(2) on 1024x768 tablet (full) = ${sTabFull} (fits)`);
 
-// Desktop: no shrink.
+// Desktop: no shrink (both dimensions have room).
 Object.defineProperty(window, "innerWidth", { value: 1920, configurable: true });
 Object.defineProperty(window, "innerHeight", { value: 1080, configurable: true });
 window.visualViewport = null;
 const sDesk = window.eval("boardCellScale(2)");
 ok(sDesk === 1, `boardCellScale(2) on desktop = ${sDesk} (no shrink)`);
 
-// 80% zoom when the pad is open (small phone).
-Object.defineProperty(window, "innerWidth", { value: 360, configurable: true });
+// 80% zoom when the pad is open. Use a wide-but-short viewport so HEIGHT is
+// the limiter (not width), so the pad's 80% zoom is what changes the scale.
+Object.defineProperty(window, "innerWidth", { value: 1024, configurable: true });
 Object.defineProperty(window, "innerHeight", { value: 640, configurable: true });
 window.visualViewport = null;
 document.body.classList.add("pad-open");
@@ -105,13 +108,35 @@ const sNoPad = window.eval("boardCellScale(2)");
 ok(sPad < sNoPad, `pad-open zoom: ${sPad.toFixed(3)} < ${sNoPad.toFixed(3)} (80% zoom applied)`);
 
 // ---- 2. buildColumns produces smaller canvases when the board must shrink ----
-window.eval("buildColumns(2)");
+// Local boot has one placeholder player (slot 0). On desktop it fits at full
+// size: cell 30 -> board 300x600.
+Object.defineProperty(window, "innerWidth", { value: 1920, configurable: true });
+Object.defineProperty(window, "innerHeight", { value: 1080, configurable: true });
+window.eval("buildColumns()");
 const boardW = document.getElementById("board-0").width;
 const boardH = document.getElementById("board-0").height;
-// 360x640: scale ~0.93 -> cell 25 -> 250x500 (desktop would be 270x540).
-ok(boardW < 270, `mobile board width ${boardW} < desktop 270 (scaled down)`);
-ok(boardH < 540, `mobile board height ${boardH} < desktop 540 (scaled down)`);
-ok(boardH >= 240, `mobile board height ${boardH} >= 240 (still playable)`);
+ok(boardW === 300, `desktop 1p board width ${boardW} === 300 (full size)`);
+ok(boardH === 600, `desktop 1p board height ${boardH} === 600 (full size)`);
+
+// ---- 2b. Online: only the slots that have a player get a column ----
+// 4 slots exist but only 2 are filled -> only board-0 and board-1 render.
+window.eval(`
+  online = true;
+  onlinePlayers = [{ slot: 0, name: "A" }, { slot: 1, name: "B" }];
+  players.length = 0;
+  for (let i = 0; i < 4; i++) players.push(makePlayer(i));
+  buildColumns();
+`);
+ok(!!document.getElementById("board-0"), "online 2/4: board-0 rendered (present player)");
+ok(!!document.getElementById("board-1"), "online 2/4: board-1 rendered (present player)");
+ok(!document.getElementById("board-2"), "online 2/4: board-2 NOT rendered (empty slot)");
+ok(!document.getElementById("board-3"), "online 2/4: board-3 NOT rendered (empty slot)");
+// Reset to local single-player state.
+window.eval(`
+  online = false; onlinePlayers = [];
+  players.length = 0; players.push(makePlayer(0));
+  buildColumns();
+`);
 
 // ---- 3. Zoom prevention handlers ----
 let prevented = 0;
