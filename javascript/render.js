@@ -26,13 +26,27 @@ const MINI_BY_COUNT = { 1: 19, 2: 17, 3: 15, 4: 13 };
 const SLOT_H_BY_COUNT = { 1: 64, 2: 58, 3: 52, 4: 48 };
 const MINI_W_BY_COUNT = { 1: 96, 2: 88, 3: 80, 4: 72 };
 
+// On narrow (mobile) viewports, shrink the board so the touch pad, the
+// browser address bar and the safe areas all fit without scrolling.
+// Returns a 0..1 scale factor for the given player count.
+function boardCellScale(n) {
+  if (window.innerWidth > 700) return 1;
+  const base = CELL_BY_COUNT[n] || 21;
+  const reserve = 320; // title + stats + touch pad + safe-area + margin
+  const avail = Math.max(200, window.innerHeight - reserve);
+  return Math.min(1, avail / (ROWS * base));
+}
+let lastBoardScale = 0;
+
 function buildColumns(n) {
   const wrap = document.getElementById("columns");
   wrap.innerHTML = "";
-  const cell = CELL_BY_COUNT[n] || 21;
-  const mini = MINI_BY_COUNT[n] || 13;
-  const slotH = SLOT_H_BY_COUNT[n] || 48;
-  const miniW = MINI_W_BY_COUNT[n] || 72;
+  const scale = Math.round(boardCellScale(n) * 100) / 100;
+  lastBoardScale = scale;
+  const cell = Math.max(12, Math.floor((CELL_BY_COUNT[n] || 21) * scale));
+  const mini = Math.max(9, Math.floor((MINI_BY_COUNT[n] || 13) * scale));
+  const slotH = Math.max(30, Math.floor((SLOT_H_BY_COUNT[n] || 48) * scale));
+  const miniW = Math.max(40, Math.floor((MINI_W_BY_COUNT[n] || 72) * scale));
 
   for (let i = 0; i < n; i++) {
     const pl = players[i];

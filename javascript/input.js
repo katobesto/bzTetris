@@ -545,3 +545,16 @@ window.addEventListener("blur", () => {
   for (const ps of padState) { ps.holds.left = ps.holds.right = ps.holds.down = false; }
   if (state === State.PLAYING && !settingsOpen) pauseGame();
 });
+
+/* ============================================================
+ * ZOOM PREVENTION — iOS Safari ignores user-scalable=no, so also
+ * block pinch gestures and double-tap zoom in JS.
+ * ============================================================ */
+document.addEventListener("gesturestart", (e) => e.preventDefault()); // iOS pinch
+document.addEventListener("dblclick", (e) => e.preventDefault());    // double-tap zoom
+let lastTouchEnd = 0;
+document.addEventListener("touchend", (e) => {
+  const now = Date.now();
+  if (now - lastTouchEnd < 300) e.preventDefault(); // double-tap
+  lastTouchEnd = now;
+}, { passive: false });

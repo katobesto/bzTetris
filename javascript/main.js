@@ -94,3 +94,15 @@ connectNet();   // open the WebSocket so online play is ready (net.js)
 state = State.HOME;
 showHome();
 requestAnimationFrame(frame);
+
+/* ============================================================
+ * RESIZE — rebuild the boards when the mobile scale factor changes
+ * (rotation, or the browser address bar showing/hiding). Only rebuilds
+ * when the computed scale actually changes, so it's cheap.
+ * ============================================================ */
+window.addEventListener("resize", () => {
+  const s = boardCellScale(players.length);
+  if (Math.abs(s - lastBoardScale) < 0.01) return;
+  lastBoardScale = s;
+  buildColumns(players.length);
+});
