@@ -20,7 +20,7 @@ const css = fs.readFileSync(path.join(ROOT, "css/style.css"), "utf8");
 
 // Inline every <script src="javascript/x.js"> so jsdom executes them in order
 // with a shared global lexical scope (like a real browser).
-html = html.replace(/<script src="(javascript\/[^\"]+)"><\/script>/g, (m, src) => {
+html = html.replace(/<script src="(javascript\/[^"\?]+)[^"]*"><\/script>/g, (m, src) => {
   const code = fs.readFileSync(path.join(ROOT, src), "utf8");
   return "<script>\n" + code + "\n</script>";
 });

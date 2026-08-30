@@ -160,3 +160,21 @@ docker restart <container-id>
 # Ver logs del contenedor:
 docker logs -f <container-id>
 ```
+
+---
+
+## Cache-busting (importante en cada deploy)
+
+Los navegadores (sobre todo en móviles) pueden servir los archivos JS/CSS en
+caché y no recargar los cambios. Para evitarlo, `index.html` carga todos los
+recursos con un parámetro de versión:
+
+```html
+<link rel="stylesheet" href="css/style.css?v=2" />
+<script src="javascript/core.js?v=2"></script>
+```
+
+**Regla: en cada deploy que cambie JS o CSS, incrementa el valor de `?v=` en
+`index.html`** (busca `?v=` y súbelo: 2 → 3 → 4…). Con un valor nuevo el
+navegador descarga los archivos de nuevo y los usuarios ven los cambios sin
+tener que vaciar la caché a mano.

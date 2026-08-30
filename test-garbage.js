@@ -9,7 +9,7 @@ const { JSDOM } = require("jsdom");
 
 const ROOT = __dirname;
 let html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-html = html.replace(/<script src="(javascript\/[^\"]+)"><\/script>/g, (m, src) => {
+html = html.replace(/<script src="(javascript\/[^"\?]+)[^"]*"><\/script>/g, (m, src) => {
   const code = fs.readFileSync(path.join(ROOT, src), "utf8");
   return "<script>\n" + code + "\n</script>";
 });
