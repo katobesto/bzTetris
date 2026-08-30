@@ -90,8 +90,8 @@ setTimeout(() => {
   ok(G("screenKind") === "home", "Screen kind is 'home' (got: " + G("screenKind") + ")");
   const screenText = doc.getElementById("screen") ? doc.getElementById("screen").textContent : "";
   ok(/TETRIS/.test(screenText), "Home screen shows TETRIS title");
-  ok(/Local Play/.test(screenText), "Home screen shows 'Local Play'");
-  ok(/Online Play/.test(screenText), "Home screen shows 'Online Play'");
+  ok(/Juego local/.test(screenText), "Home screen shows 'Juego local'");
+  ok(/Juego online/.test(screenText), "Home screen shows 'Juego online'");
   ok(G("netConnected") === true, "WebSocket connected to server");
   ok(G("players.length") === 1, "One placeholder player behind home screen");
 
@@ -102,8 +102,8 @@ setTimeout(() => {
   G("dispatchAction(0, 'Enter')");
   ok(G("state") === "netmenu", "Enter opens the online menu (got: " + G("state") + ")");
   const netText = doc.getElementById("screen") ? doc.getElementById("screen").textContent : "";
-  ok(/Create Room/i.test(netText), "Net menu shows create option");
-  ok(/Join/i.test(netText), "Net menu shows join option");
+  ok(/Crear sala/i.test(netText), "Net menu shows create option");
+  ok(/Unirse/i.test(netText), "Net menu shows join option");
 
   // Create a room from the client -> should land in LOBBY.
   G("createRoom('Tester')");

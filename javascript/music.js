@@ -37,6 +37,37 @@ let musicTrack = 0;    // 1 or 2, rolled when a game starts
 let musicMode = "off"; // "off" | "normal" | "danger"
 let musicFades = [];   // pending volume fades: { a, from, to, pauseAtEnd, t0 }
 
+/* ============================================================
+ * MENU MUSIC — music/menu.mp3, loops while the UI is on a
+ * non-gameplay screen (home, menus, lobby, pause). The browser
+ * blocks autoplay until the first user gesture, so updateMenuMusic()
+ * retries play() every frame until it is allowed.
+ * ============================================================ */
+const menuAudio = new Audio("music/menu.mp3");
+menuAudio.preload = "auto";
+menuAudio.loop = true;
+menuAudio.volume = 0;
+menuAudio.onerror = () => {
+  // Fallback: the user may have dropped the file in a "musicas/" folder.
+  if (menuAudio.src.indexOf("music/menu.mp3") !== -1) menuAudio.src = "musicas/menu.mp3";
+};
+let menuMusicOn = false;
+
+function updateMenuMusic() {
+  const want = state === State.HOME || state === State.MENU ||
+               state === State.NET_MENU || state === State.LOBBY ||
+               state === State.PAUSED;
+  if (want && !menuMusicOn) {
+    const p = menuAudio.play();
+    if (p && p.catch) p.catch(() => {}); // blocked until a user gesture; retried next frame
+    fadeAudio(menuAudio, MUSIC_VOLUME);
+    menuMusicOn = true;
+  } else if (!want && menuMusicOn) {
+    fadeAudio(menuAudio, 0, true);
+    menuMusicOn = false;
+  }
+}
+
 function fadeAudio(a, to, pauseAtEnd) {
   musicFades = musicFades.filter(f => f.a !== a);
   musicFades.push({ a, from: a.volume, to, pauseAtEnd: !!pauseAtEnd, t0: performance.now() });

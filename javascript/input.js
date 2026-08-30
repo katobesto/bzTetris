@@ -31,10 +31,10 @@ let homeSelect = 0;
 /* ============================================================
  * SETTINGS OVERLAY LABELS (key rebinding table)
  * ============================================================ */
-const ACTION_LABELS = { left: "Move Left", right: "Move Right", down: "Soft Drop", rotateCW: "Rotate CW", hardDrop: "Hard Drop", rotateCCW: "Rotate CCW", hold: "Hold", pause: "Pause", settings: "Settings", restart: "Back / Rotate Right" };
+const ACTION_LABELS = { left: "Mover izquierda", right: "Mover derecha", down: "Caída suave", rotateCW: "Girar horario", hardDrop: "Caída dura", rotateCCW: "Girar antihorario", hold: "Guardar", pause: "Pausa", settings: "Ajustes", restart: "Volver / Girar derecha" };
 
 const KEY_NAMES = {
-  ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓", Space: "Space", Enter: "Enter", Escape: "Esc", Tab: "Tab", Backspace: "Bksp",
+  ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓", Space: "Espacio", Enter: "Enter", Escape: "Esc", Tab: "Tab", Backspace: "Retroceso",
   KeyW: "W", KeyA: "A", KeyS: "S", KeyD: "D", KeyZ: "Z", KeyX: "X", KeyC: "C", KeyV: "V", KeyF: "F", KeyG: "G", KeyH: "H", KeyJ: "J", KeyK: "K", KeyL: "L",
   KeyQ: "Q", KeyE: "E", KeyR: "R", KeyT: "T", KeyY: "Y", KeyU: "U", KeyI: "I", KeyO: "O", KeyP: "P",
   Digit1: "1", Digit2: "2", Digit3: "3", Digit4: "4", Digit5: "5", Digit6: "6", Digit7: "7", Digit8: "8", Digit9: "9", Digit0: "0"
@@ -424,7 +424,7 @@ function renderBindTable() {
     const tr = document.createElement("tr");
     const cur = binds[action];
     const isPad = typeof cur === "string" && cur.startsWith("Pad");
-    const display = isPad ? cur.replace(/^Pad\d+:/, "Pad ") : (KEY_NAMES[cur] || cur);
+    const display = isPad ? cur.replace(/^Pad\d+:/, "Mando ") : (KEY_NAMES[cur] || cur);
     tr.innerHTML = `<td>${label}</td><td><button class="btn bind-btn" data-action="${action}">${display}</button></td>`;
     tbody.appendChild(tr);
   }
@@ -438,7 +438,7 @@ function startCapture(action, input) {
   capture = { action, input };
   renderBindTable();
   const btn = document.querySelector(`.bind-btn[data-action="${action}"]`);
-  if (btn) { btn.classList.add("capture"); btn.textContent = input === "gamepad" ? "Press pad button…" : "Press key…"; }
+  if (btn) { btn.classList.add("capture"); btn.textContent = input === "gamepad" ? "Pulsa un botón del mando…" : "Pulsa una tecla…"; }
 }
 
 // Shared binding helper: rejects conflicts, persists, and re-renders the table.

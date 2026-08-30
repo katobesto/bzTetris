@@ -34,7 +34,7 @@ function connectNet() {
     netConnected = false;
     // If we were mid-match or in a lobby, surface the disconnect.
     if (wasConnected && (state === State.PLAYING || state === State.LOBBY || state === State.COUNTDOWN)) {
-      netError = "Connection lost";
+      netError = "Conexión perdida";
       if (state === State.LOBBY) refreshScreen();
     }
   };
@@ -50,12 +50,12 @@ function sendNet(msg) {
  * ============================================================ */
 function createRoom(name) {
   connectNet();
-  sendNet({ t: "create", name: name || "Player" });
+  sendNet({ t: "create", name: name || "Jugador" });
 }
 
 function joinRoom(code, name) {
   connectNet();
-  sendNet({ t: "join", code, name: name || "Player" });
+  sendNet({ t: "join", code, name: name || "Jugador" });
 }
 
 function setReady(ready) {

@@ -151,7 +151,7 @@ wss.on("connection", (ws) => {
         const code = genCode();
         const room = makeRoom(code);
         rooms.set(code, room);
-        player = { id: code + "-0", name: String(msg.name || "Player").slice(0, 16), ready: false, alive: true, ws, room, slot: 0 };
+        player = { id: code + "-0", name: String(msg.name || "Jugador").slice(0, 16), ready: false, alive: true, ws, room, slot: 0 };
         room.slots[0] = player;
         sendTo(player, { t: "joined", room: code, slot: 0, players: roomPlayers(room) });
         break;
@@ -160,12 +160,12 @@ wss.on("connection", (ws) => {
       case "join": {
         const code = String(msg.code || "").toUpperCase().trim();
         const room = rooms.get(code);
-        if (!room) { ws.send(JSON.stringify({ t: "error", msg: "Room not found" })); return; }
-        if (occupied(room).length >= MAX_PLAYERS) { ws.send(JSON.stringify({ t: "error", msg: "Room is full" })); return; }
-        if (room.started) { ws.send(JSON.stringify({ t: "error", msg: "Match already started" })); return; }
+        if (!room) { ws.send(JSON.stringify({ t: "error", msg: "Sala no encontrada" })); return; }
+        if (occupied(room).length >= MAX_PLAYERS) { ws.send(JSON.stringify({ t: "error", msg: "La sala está llena" })); return; }
+        if (room.started) { ws.send(JSON.stringify({ t: "error", msg: "La partida ya ha comenzado" })); return; }
         let slot = -1;
         for (let i = 0; i < room.slots.length; i++) if (!room.slots[i]) { slot = i; break; }
-        player = { id: code + "-" + slot, name: String(msg.name || "Player").slice(0, 16), ready: false, alive: true, ws, room, slot };
+        player = { id: code + "-" + slot, name: String(msg.name || "Jugador").slice(0, 16), ready: false, alive: true, ws, room, slot };
         room.slots[slot] = player;
         sendTo(player, { t: "joined", room: code, slot, players: roomPlayers(room) });
         broadcast(room, { t: "lobby", players: roomPlayers(room) }, player.id);

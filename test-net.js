@@ -124,7 +124,7 @@ async function main() {
   await C.connect();
   C.send({ t: "join", code: "ZZZZ", name: "Carol" });
   const errC = await C.waitFor(m => m.t === "error");
-  ok(errC.t === "error" && /not found/i.test(errC.msg), "Joining a bad room returns an error");
+  ok(errC.t === "error" && /no encontrada/i.test(errC.msg), "Joining a bad room returns an error");
 
   // 9. Disconnect mid-match: A drops, B should get 'out' for slot 0.
   // (Room still has B alive; with 1 alive of 2, B wins.)

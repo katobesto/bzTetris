@@ -14,6 +14,7 @@ function frame(now) {
 
   stepMusicFades(performance.now()); // music crossfade (music.js; danger switching is in updateDangerMusic)
   updateDangerMusic();         // stack-height driven track swap
+  updateMenuMusic();           // menu.mp3 on home/menus/lobby/pause (music.js)
   pollGamepads();              // gamepad polling (input.js)
   update(dt, now);             // state machine + per-player physics
   render();                    // draw every player column

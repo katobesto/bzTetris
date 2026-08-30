@@ -310,7 +310,7 @@ function onGarbageReceived(from, rows) {
   applyGarbage(pl, rows);
   // Visual feedback: a brief shake + popup on the local board.
   triggerShake(3, 120);
-  addPopup(pl, "GARBAGE!", COLS * pl.cell / 2, ROWS * pl.cell * 0.5, 24, "#ff4d6d");
+  addPopup(pl, "¡BASURA!", COLS * pl.cell / 2, ROWS * pl.cell * 0.5, 24, "#ff4d6d");
 }
 
 // Called by net.js when a rival is reported out by the server.
