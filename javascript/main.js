@@ -32,6 +32,10 @@ function update(dt, now) {
       updateParticles(pl, dt);
       updatePopups(pl, dt);
       if (pl.garbageFlash > 0) pl.garbageFlash = Math.max(0, pl.garbageFlash - dt / 0.4); // fade over 0.4s
+      if (pl.garbagePhoto) {
+        pl.garbagePhoto.t += dt;
+        if (pl.garbagePhoto.t >= pl.garbagePhoto.dur) pl.garbagePhoto = null;
+      }
     }
     updateShake(dt);
   }

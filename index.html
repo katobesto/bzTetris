@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>BZTETRIS</title>
-  <link rel="stylesheet" href="css/style.css?v=4" />
+  <link rel="stylesheet" href="css/style.css?v=5" />
 </head>
 <body>
   <div class="app">
@@ -35,6 +35,10 @@
        hidden; the user taps this to reveal it (and to hide it again). -->
   <button class="tp-toggle" id="tpToggle" aria-label="Mostrar controles táctiles">&#128313;</button>
 
+  <!-- Hidden file input for uploading a player avatar (online lobby).
+       Triggered by the camera button in the lobby (render.js). -->
+  <input type="file" id="photoInput" accept="image/*" hidden>
+
   <!-- Touch controls: shown on touch devices during play (and the pause button).
        Wired up in input.js (touchpad.js logic lives there). Hidden by default. -->
   <div class="touchpad hidden" id="touchpad">
@@ -58,14 +62,14 @@
        looping Audio objects from the files in music/. The browser blocks autoplay until a
        user gesture; startMusic() runs from that gesture and resumes playback. -->
 
-  <script src="javascript/constants.js?v=4"></script>
-  <script src="javascript/fx.js?v=4"></script>
-  <script src="javascript/sfx.js?v=4"></script>
-  <script src="javascript/music.js?v=4"></script>
-  <script src="javascript/core.js?v=4"></script>
-  <script src="javascript/net.js?v=4"></script>
-  <script src="javascript/render.js?v=4"></script>
-  <script src="javascript/input.js?v=4"></script>
-  <script src="javascript/main.js?v=4"></script>
+  <script src="javascript/constants.js?v=5"></script>
+  <script src="javascript/fx.js?v=5"></script>
+  <script src="javascript/sfx.js?v=5"></script>
+  <script src="javascript/music.js?v=5"></script>
+  <script src="javascript/core.js?v=5"></script>
+  <script src="javascript/net.js?v=5"></script>
+  <script src="javascript/render.js?v=5"></script>
+  <script src="javascript/input.js?v=5"></script>
+  <script src="javascript/main.js?v=5"></script>
 </body>
 </html>

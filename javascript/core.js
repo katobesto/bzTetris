@@ -48,6 +48,9 @@ function makePlayer(slot) {
     // per-player effects (drawn on this player's own canvas)
     particles: [], popups: [],
     garbageFlash: 0, // 0..1 red flash when garbage lands (render.js)
+    garbagePhoto: null, // { url, img, t } attacker's avatar shown on garbage hit
+    // Online avatar (data URL) for this slot, from the server roster.
+    photo: null,
     // DOM/canvas refs + sizing (filled by buildColumns)
     cell: CELL, miniCell: MINI_CELL, nextSlotH: 64,
     ctx: null, nextCtx: null, holdCtx: null,
@@ -66,6 +69,7 @@ function resetPlayer(pl) {
   pl.gravAcc = 0; pl.lockTimer = 0; pl.clearing = null;
   pl.particles.length = 0; pl.popups.length = 0;
   pl.garbageFlash = 0;
+  pl.garbagePhoto = null;
   if (pl.elOutBadge) pl.elOutBadge.classList.add("hidden");
 }
 
@@ -356,6 +360,24 @@ function onGarbageLanded(pl, rows, from) {
   const who = from && from.name ? from.name : (from ? "P" + (from.slot + 1) : "");
   addPopup(pl, "¡BASURA!", COLS * pl.cell / 2, ROWS * pl.cell * 0.5, 24, "#ff4d6d");
   if (who) addPopup(pl, who, COLS * pl.cell / 2, ROWS * pl.cell * 0.5 + 26, 16, "#ffb3c1");
+  // Online: show the attacker's avatar on our board while the flash fades.
+  if (online && from && from.photo) triggerGarbagePhoto(pl, from);
+}
+
+// Load the attacker's avatar (data URL) and stage it on the victim's board so
+// render.js can draw it over the red flash. The image is cached by URL so a
+// repeat attack from the same player reuses the decoded bitmap.
+const photoCache = {};
+function triggerGarbagePhoto(pl, attacker) {
+  const url = attacker.photo;
+  let img = photoCache[url];
+  if (!img) {
+    img = new Image();
+    img.onload = () => { img.__ready = true; };
+    img.src = url;
+    photoCache[url] = img;
+  }
+  pl.garbagePhoto = { url, img, t: 0, dur: 0.9 };
 }
 
 // Called by net.js when a rival is reported out by the server.
@@ -387,6 +409,7 @@ function setupOnlineMatch() {
     const info = onlinePlayers.find(p => p.slot === i);
     const pl = makePlayer(i);
     pl.name = info ? info.name : ("P" + (i + 1));
+    pl.photo = info ? (info.photo || null) : null; // attacker avatar for the garbage effect
     pl.remote = i !== mySlot; // remote players are rendered from snapshots
     players.push(pl);
   }

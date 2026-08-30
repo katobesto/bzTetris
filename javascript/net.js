@@ -109,6 +109,13 @@ function setReady(ready) {
   sendNet({ t: "ready", ready });
 }
 
+// Upload (or clear, with null) this player's avatar. The server stores it on
+// the slot and rebroadcasts the roster, so everyone sees it in the lobby and
+// it's available for the garbage effect once the match starts.
+function sendPhoto(dataUrl) {
+  sendNet({ t: "photo", photo: dataUrl || null });
+}
+
 function hostStart() {
   sendNet({ t: "start" });
 }
@@ -146,12 +153,14 @@ function handleNetMessage(msg) {
       onlinePlayers = msg.players;
       netError = "";
       state = State.LOBBY;
+      syncPhotosFromRoster();
       showLobby();
       break;
     }
 
     case "lobby": {
       onlinePlayers = msg.players;
+      syncPhotosFromRoster();
       if (state === State.LOBBY) showLobby();
       break;
     }
@@ -212,4 +221,17 @@ function applyRemoteSnapshot(slot, data) {
     if (pl.elOutBadge) pl.elOutBadge.classList.remove("hidden");
   }
   updateStats(pl);
+}
+
+// Copy each roster entry's avatar onto the matching local player mirror, so
+// the column header and the garbage effect have the attacker's photo. Runs on
+// every roster update (joined / lobby). Safe to call before the match starts
+// (players[] may be the idle placeholder) — it only touches slots that exist.
+function syncPhotosFromRoster() {
+  for (const info of onlinePlayers) {
+    const pl = players[info.slot];
+    if (!pl) continue;
+    pl.photo = info.photo || null;
+    if (typeof applyAvatar === "function") applyAvatar(pl);
+  }
 }

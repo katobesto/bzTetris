@@ -20,6 +20,10 @@ const ROWS = 20; // must match constants.js
 // How long a dropped player's slot is held (as a "ghost") so their client can
 // rejoin after a network blip / proxy idle-timeout drop. Cleared by the sweep.
 const REJOIN_GRACE_MS = 60000;
+// Cap for avatar data URLs. Photos are resized to 96x96 JPEG on the client
+// (~5-15KB); this guard stops a client from stuffing a huge blob into the
+// roster that gets broadcast to the whole room on every lobby change.
+const MAX_PHOTO_BYTES = 64 * 1024;
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -109,14 +113,14 @@ function roomPlayers(room) {
   const out = [];
   const host = hostSlot(room);
   room.slots.forEach((p, i) => {
-    if (p) out.push({ slot: i, name: p.name, ready: p.ready, alive: p.alive, isHost: i === host });
+    if (p) out.push({ slot: i, name: p.name, ready: p.ready, alive: p.alive, isHost: i === host, photo: p.photo || null });
   });
   // Ghost slots (dropped lobby players) show up so the room doesn't look empty
   // while their client reconnects.
   for (const i of Object.keys(room.ghosts)) {
     const g = room.ghosts[i];
     if (!g) continue;
-    out.push({ slot: Number(i), name: g.name, ready: g.ready, alive: true, isHost: false, ghost: true });
+    out.push({ slot: Number(i), name: g.name, ready: g.ready, alive: true, isHost: false, ghost: true, photo: g.photo || null });
   }
   return out;
 }
@@ -251,6 +255,22 @@ wss.on("connection", (ws) => {
         break;
       }
 
+      case "photo": {
+        // A player uploads (or clears) their avatar. Stored on the slot and
+        // broadcast to the room so everyone sees it in the lobby and can use
+        // it in the garbage effect. Only accepted while in the lobby (the
+        // roster is frozen once the match starts).
+        if (!player || !player.room) return;
+        if (player.room.started) return;
+        const photo = (typeof msg.photo === "string" && msg.photo.startsWith("data:image/") && msg.photo.length <= MAX_PHOTO_BYTES)
+          ? msg.photo : null;
+        player.photo = photo;
+        const room = player.room;
+        sendTo(player, { t: "lobby", players: roomPlayers(room) });
+        broadcast(room, { t: "lobby", players: roomPlayers(room) }, player.id);
+        break;
+      }
+
       case "start": {
         // Host force-start (works even if not everyone is ready).
         if (!player) return;
@@ -344,7 +364,7 @@ function leaveRoom(player, voluntary) {
   } else {
     // Lobby: hold the slot as a ghost (unless they left on purpose) so the
     // client can rejoin after a drop, and show it as "reconnecting".
-    if (!voluntary) room.ghosts[slot] = { name: player.name, ready: player.ready, leftAt: Date.now() };
+    if (!voluntary) room.ghosts[slot] = { name: player.name, ready: player.ready, photo: player.photo || null, leftAt: Date.now() };
     else delete room.ghosts[slot];
     broadcast(room, { t: "lobby", players: roomPlayers(room) });
   }

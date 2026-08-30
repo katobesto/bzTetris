@@ -78,6 +78,27 @@ body {
 }
 .out-badge.hidden { display: none; }
 
+/* Player avatar in the column header (online only). Small round badge next to
+   the name; shows the uploaded photo or a letter fallback. */
+.col-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #00e5ff;
+  background: rgba(0, 229, 255, 0.12);
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+}
+.col-avatar.has-photo { color: transparent; border-color: rgba(255, 255, 255, 0.5); }
+
 .col-body { display: flex; gap: 10px; align-items: flex-start; }
 
 .col-body > canvas {
@@ -197,6 +218,62 @@ body {
   white-space: nowrap;
 }
 .slot-ready { color: #43e97b; font-weight: 800; font-size: 12px; letter-spacing: 1.5px; }
+
+/* Lobby avatars. Each slot shows a round badge: the player's photo, a letter
+   fallback, or (for my own slot) a camera button to upload/change the photo. */
+.lobby-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 800;
+  color: #00e5ff;
+  background: rgba(0, 229, 255, 0.12);
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+}
+.lobby-avatar.has-photo { color: transparent; border-color: rgba(255, 255, 255, 0.5); }
+.lobby-avatar.empty { background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.1); color: transparent; }
+/* My slot: a tappable camera button. */
+.lobby-avatar.cam {
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.lobby-avatar.cam:hover { transform: scale(1.06); box-shadow: 0 0 14px rgba(0, 229, 255, 0.4); }
+.lobby-avatar.cam:active { transform: scale(0.97); }
+.lobby-avatar-inner {
+  width: 100%;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background-size: cover;
+  background-position: center;
+}
+.lobby-avatar-inner.has-photo { color: transparent; }
+/* small camera glyph overlay so the button is recognisable even with a photo */
+.lobby-avatar.cam::after {
+  content: "📷";
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  font-size: 13px;
+  line-height: 1;
+  background: #0a0e1a;
+  border: 1px solid rgba(0, 229, 255, 0.5);
+  border-radius: 50%;
+  padding: 2px;
+  pointer-events: none;
+}
 .slot-waiting { color: rgba(232, 236, 244, 0.5); font-size: 12.5px; }
 
 /* End screens */

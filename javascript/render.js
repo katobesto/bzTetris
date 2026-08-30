@@ -97,6 +97,7 @@ function buildColumns() {
     col.className = "player-col";
     col.innerHTML = `
       <div class="col-header">
+        ${online ? `<span class="col-avatar" id="avatar-${i}"></span>` : ""}
         <span class="p-label">${escapeHtml(label)}</span>
         <span class="pad-dot" id="padDot-${i}"></span>
         <span class="out-badge hidden" id="outBadge-${i}">FUERA</span>
@@ -126,6 +127,8 @@ function buildColumns() {
     pl.elLines = document.getElementById(`lines-${i}`);
     pl.elOutBadge = col.querySelector(`#outBadge-${i}`);
     pl.elPadDot = col.querySelector(`#padDot-${i}`);
+    pl.elAvatar = online ? col.querySelector(`#avatar-${i}`) : null;
+    applyAvatar(pl);
 
     updateStats(pl);
     drawNext(pl);
@@ -214,6 +217,9 @@ function renderPlayer(pl) {
     ctx.fillRect(0, 0, COLS * pl.cell, ROWS * pl.cell);
   }
 
+  // Attacker's avatar: shown over the flash while it fades (online garbage).
+  if (pl.garbagePhoto) drawGarbagePhoto(pl, ctx);
+
   // Ghost piece + active piece
   if (pl.piece && !pl.clearing) {
     const ghost = { ...pl.piece };
@@ -233,6 +239,39 @@ function renderPlayer(pl) {
 
 function render() {
   for (const pl of players) if (pl.ctx) renderPlayer(pl);
+}
+
+// Draw the attacker's avatar over the victim's board while the garbage flash
+// fades. The photo scales in slightly and fades out over its lifetime, so it
+// reads as "the person who threw the garbage" landing on your board.
+function drawGarbagePhoto(pl, ctx) {
+  const gp = pl.garbagePhoto;
+  const img = gp.img;
+  if (!img || !img.__ready) return;
+  const k = gp.t / gp.dur;                 // 0 -> 1 over the lifetime
+  const alpha = Math.max(0, 1 - k);        // fade out
+  const size = pl.cell * 6 * (0.85 + 0.15 * k); // settle from a bit larger
+  const x = (COLS * pl.cell - size) / 2;
+  const y = (ROWS * pl.cell - size) / 2 - 10;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // rounded clip so the square avatar looks like a badge
+  const r = size * 0.18;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + size, y, x + size, y + size, r);
+  ctx.arcTo(x + size, y + size, x, y + size, r);
+  ctx.arcTo(x, y + size, x, y, r);
+  ctx.arcTo(x, y, x + size, y, r);
+  ctx.closePath();
+  ctx.clip();
+  ctx.drawImage(img, x, y, size, size);
+  // red ring to tie it to the garbage flash
+  ctx.globalAlpha = alpha * 0.9;
+  ctx.lineWidth = Math.max(2, size * 0.05);
+  ctx.strokeStyle = "#ff2d55";
+  ctx.stroke();
+  ctx.restore();
 }
 
 /* ============================================================
@@ -264,6 +303,22 @@ function updateStats(pl) {
   pl.elScore.textContent = pl.score.toLocaleString("es-ES");
   pl.elLevel.textContent = String(pl.level);
   pl.elLines.textContent = String(pl.linesCleared);
+}
+
+// Paint a player's avatar into their column header (online only). Shows the
+// uploaded photo if present, otherwise a letter fallback. Called on column
+// build and whenever the roster syncs a new photo.
+function applyAvatar(pl) {
+  if (!pl.elAvatar) return;
+  const el = pl.elAvatar;
+  if (pl.photo) {
+    el.classList.add("has-photo");
+    el.style.backgroundImage = `url("${pl.photo}")`;
+  } else {
+    el.classList.remove("has-photo");
+    el.style.backgroundImage = "";
+    el.textContent = (pl.name || "?").trim().charAt(0).toUpperCase();
+  }
 }
 
 /* ============================================================
@@ -390,11 +445,14 @@ function showLobby() {
       : (p.ready ? '<span class="slot-ready">LISTO</span>' : '<span class="slot-waiting">esperando…</span>');
     const hostTag = p.isHost ? ' <span class="host-tag">ANFITRIÓN</span>' : "";
     const meTag = p.slot === mySlot ? ' <span class="me-tag">(tú)</span>' : "";
-    return `<div class="wait-slot${p.ready && !ghost ? " ready" : ""}${ghost ? " ghost" : ""}"><span class="slot-label">P${p.slot + 1}</span><span class="slot-src">${escapeHtml(p.name)}${hostTag}${meTag}</span>${ready}</div>`;
+    const avatar = p.slot === mySlot
+      ? lobbyCameraAvatar(p)
+      : lobbyAvatarSpan(p);
+    return `<div class="wait-slot${p.ready && !ghost ? " ready" : ""}${ghost ? " ghost" : ""}">${avatar}<span class="slot-label">P${p.slot + 1}</span><span class="slot-src">${escapeHtml(p.name)}${hostTag}${meTag}</span>${ready}</div>`;
   }).join("");
   const emptyCount = 4 - onlinePlayers.length;
   const emptyRows = Array.from({ length: emptyCount }, (_, i) =>
-    `<div class="wait-slot"><span class="slot-label">P${onlinePlayers.length + i + 1}</span><span class="slot-src">vacío</span><span class="slot-waiting">—</span></div>`
+    `<div class="wait-slot"><span class="lobby-avatar empty"></span><span class="slot-label">P${onlinePlayers.length + i + 1}</span><span class="slot-src">vacío</span><span class="slot-waiting">—</span></div>`
   ).join("");
   screenEl.innerHTML = `
     <div class="screen-inner">
@@ -407,14 +465,87 @@ function showLobby() {
         <button class="btn" id="lobbyLeave">Salir de la sala</button>
       </div>
       ${netError ? `<p class="screen-hint net-error">${escapeHtml(netError)}</p>` : ""}
-      <p class="screen-hint">Comparte el código de sala con tus amigos &middot; Esc para salir</p>
+      <p class="screen-hint">Comparte el código de sala con tus amigos &middot; Pulsa tu foto para subirla &middot; Esc para salir</p>
     </div>`;
   screenEls = {};
   document.getElementById("lobbyReady").onclick = () => setReady(!(me && me.ready));
   const startBtn = document.getElementById("lobbyStart");
   if (startBtn) startBtn.onclick = () => hostStart();
   document.getElementById("lobbyLeave").onclick = () => returnHome();
+  const camBtn = document.getElementById("lobbyCamBtn");
+  if (camBtn) camBtn.onclick = onLobbyCameraClick;
   screenEl.classList.remove("hidden");
+}
+
+// Avatar markup for a lobby slot. My slot is a camera button (upload/change);
+// others show their photo or a letter fallback.
+function lobbyAvatarSpan(p) {
+  const ph = p.photo;
+  const letter = (p.name || "?").trim().charAt(0).toUpperCase();
+  return `<span class="lobby-avatar${ph ? " has-photo" : ""}"${ph ? ` style="background-image:url(&quot;${ph}&quot;)"` : ""}>${ph ? "" : letter}</span>`;
+}
+function lobbyCameraAvatar(p) {
+  const ph = p.photo;
+  return `<button class="lobby-avatar cam" id="lobbyCamBtn" title="Subir o cambiar tu foto">
+    <span class="lobby-avatar-inner${ph ? " has-photo" : ""}"${ph ? ` style="background-image:url(&quot;${ph}&quot;)"` : ""}>📷</span>
+  </button>`;
+}
+
+// Camera button in the lobby: open the file picker, resize the chosen image
+// to a small JPEG data URL and send it to the room (server rebroadcasts it).
+function onLobbyCameraClick() {
+  const input = document.getElementById("photoInput");
+  if (!input) return;
+  input.value = ""; // allow re-selecting the same file
+  input.onchange = () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      netError = "Ese archivo no es una imagen";
+      showLobby();
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      resizePhoto(reader.result, (dataUrl) => {
+        sendPhoto(dataUrl);
+        // optimistic local update so the lobby reflects it immediately
+        const me = onlinePlayers.find(p => p.slot === mySlot);
+        if (me) me.photo = dataUrl;
+        showLobby();
+      }, (err) => {
+        netError = err || "No se pudo procesar la imagen";
+        showLobby();
+      });
+    };
+    reader.onerror = () => { netError = "No se pudo leer el archivo"; showLobby(); };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+// Downscale an image (data URL) to a square JPEG data URL so the avatar stays
+// tiny in the roster. Uses an offscreen canvas; falls back to the original if
+// the canvas path is unavailable (e.g. very old browsers).
+function resizePhoto(srcDataUrl, onDone, onErr) {
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const SIZE = 96;
+      const canvas = document.createElement("canvas");
+      canvas.width = SIZE; canvas.height = SIZE;
+      const ctx = canvas.getContext("2d");
+      // cover-crop to square
+      const s = Math.min(img.width, img.height);
+      const sx = (img.width - s) / 2, sy = (img.height - s) / 2;
+      ctx.drawImage(img, sx, sy, s, s, 0, 0, SIZE, SIZE);
+      onDone(canvas.toDataURL("image/jpeg", 0.8));
+    } catch (e) {
+      onErr("No se pudo procesar la imagen");
+    }
+  };
+  img.onerror = () => onErr("No se pudo cargar la imagen");
+  img.src = srcDataUrl;
 }
 
 function slotSourceLabel(slot) {
