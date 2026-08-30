@@ -31,6 +31,8 @@ Un **único contenedor** que sirve todo:
 El servidor Node sirve tanto el juego estático como las salas WebSocket. Coolify gestiona un solo contenedor — sin nginx intermedio, sin docker-compose, sin complicaciones.
 
 > **Nota sobre WebSocket:** Coolify (Traefik) enruta automáticamente los upgrades de WebSocket. No hay que configurar nada extra; el cliente conecta a `wss://<tu-dominio>` sobre el mismo puerto 443.
+>
+> **Estabilidad de la conexión (VPS):** el servidor envía un *heartbeat* (ping/pong) cada 30 s para que el proxy/LB no cierre el WebSocket por inactividad, y el cliente se **reconecta solo** (backoff 1 s → 8 s) y **recupera su slot** en la sala si la conexión se corta. No hace falta ningún proxy adicional: HTTP y WebSocket ya comparten el puerto 3000.
 
 ---
 
