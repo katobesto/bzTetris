@@ -16,6 +16,7 @@ function frame(now) {
   updateDangerMusic();         // stack-height driven track swap
   updateMenuMusic();           // menu.mp3 on home/menus/lobby/pause (music.js)
   pollGamepads();              // gamepad polling (input.js)
+  updateTouchpad();            // show/hide the on-screen touch pad (input.js)
   update(dt, now);             // state machine + per-player physics
   render();                    // draw every player column
 

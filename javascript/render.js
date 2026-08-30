@@ -224,16 +224,20 @@ function showMenu(count) {
     <div class="screen-inner">
       <h2 class="screen-title">JUGADORES</h2>
       <div class="menu-count-row">
-        <span class="arrow">&#9664;</span>
+        <button class="arrow menu-arrow" id="menuDec" aria-label="Menos jugadores">&#9664;</button>
         <span class="menu-count" id="menuCountEl">${count}</span>
-        <span class="arrow">&#9654;</span>
+        <button class="arrow menu-arrow" id="menuInc" aria-label="Más jugadores">&#9654;</button>
       </div>
+      <button class="btn" id="menuStart">&#9654;&nbsp; Iniciar</button>
       <p class="screen-hint">&larr; &rarr; cambiar &middot; Enter para confirmar</p>
       <p class="screen-hint" id="menuPadsEl"></p>
       <button class="btn" id="settingsBtn">&#9881;&nbsp; Ajustes (Jugador 1)</button>
     </div>`;
   screenEls = { count: screenEl.querySelector("#menuCountEl"), pads: screenEl.querySelector("#menuPadsEl") };
   document.getElementById("settingsBtn").onclick = () => openSettings();
+  document.getElementById("menuDec").onclick = () => changeMenuCount(-1);
+  document.getElementById("menuInc").onclick = () => changeMenuCount(1);
+  document.getElementById("menuStart").onclick = () => confirmMenu();
   updateMenuPadsLine();
   screenEl.classList.remove("hidden");
 }
@@ -295,12 +299,14 @@ function showNetMenu() {
         </div>
       </div>
       ${netError ? `<p class="screen-hint net-error">${escapeHtml(netError)}</p>` : ""}
+      <button class="btn" id="netBack">Volver</button>
       <p class="screen-hint">Esc para volver</p>
     </div>`;
   screenEls = {};
   const nameEl = document.getElementById("netName");
   const codeEl = document.getElementById("netCode");
   if (codeEl) codeEl.value = (codeEl.value || "").toUpperCase();
+  document.getElementById("netBack").onclick = () => returnHome();
   document.getElementById("netCreate").onclick = () => {
     const name = (nameEl.value || "Jugador").trim();
     createRoom(name);
@@ -336,6 +342,7 @@ function showLobby() {
       <div class="lobby-actions">
         <button class="btn" id="lobbyReady">${me && me.ready ? "Cancelar listo" : "Listo"}</button>
         ${isHost ? '<button class="btn" id="lobbyStart">Iniciar partida</button>' : '<p class="screen-hint">Esperando a que el anfitrión inicie…</p>'}
+        <button class="btn" id="lobbyLeave">Salir de la sala</button>
       </div>
       ${netError ? `<p class="screen-hint net-error">${escapeHtml(netError)}</p>` : ""}
       <p class="screen-hint">Comparte el código de sala con tus amigos &middot; Esc para salir</p>
@@ -344,6 +351,7 @@ function showLobby() {
   document.getElementById("lobbyReady").onclick = () => setReady(!(me && me.ready));
   const startBtn = document.getElementById("lobbyStart");
   if (startBtn) startBtn.onclick = () => hostStart();
+  document.getElementById("lobbyLeave").onclick = () => returnHome();
   screenEl.classList.remove("hidden");
 }
 
@@ -363,16 +371,23 @@ function showWaiting() {
     const src = slotSourceLabel(pl.slot);
     const st = pl.ready
       ? '<span class="slot-ready">LISTO</span>'
-      : '<span class="slot-waiting">esperando\u2026</span>';
+      : `<button class="btn slot-join-btn" id="joinBtn-${pl.slot}">Listo</button>`;
     return `<div class="wait-slot${pl.ready ? " ready" : ""}"><span class="slot-label">P${pl.slot + 1}</span><span class="slot-src">${escapeHtml(src)}</span>${st}</div>`;
   }).join("");
   screenEl.innerHTML = `
     <div class="screen-inner">
       <h2 class="screen-title">ESPERANDO JUGADORES</h2>
       <div class="wait-slots">${rows}</div>
+      <button class="btn" id="waitBack">Volver al menú</button>
       <p class="screen-hint">P1: cualquier tecla &middot; P2&ndash;P4: botón A de tu mando &middot; B o Esc para volver</p>
     </div>`;
   screenEls = {};
+  for (const pl of players) {
+    if (pl.ready) continue;
+    const b = document.getElementById(`joinBtn-${pl.slot}`);
+    if (b) b.onclick = () => joinSlot(pl.slot);
+  }
+  document.getElementById("waitBack").onclick = () => returnToMenu();
   screenEl.classList.remove("hidden");
 }
 
@@ -390,9 +405,13 @@ function showPaused() {
   screenEl.innerHTML = `
     <div class="screen-inner">
       <h2 class="screen-title">PAUSA</h2>
+      <button class="btn" id="pauseResume">&#9654;&nbsp; Continuar</button>
+      <button class="btn" id="pauseMenu">Volver al menú</button>
       <p class="screen-hint">Pulsa P o Esc para continuar &middot; R para el menú</p>
     </div>`;
   screenEls = {};
+  document.getElementById("pauseResume").onclick = () => resumeGame();
+  document.getElementById("pauseMenu").onclick = () => returnToMenu();
   screenEl.classList.remove("hidden");
 }
 
@@ -409,9 +428,11 @@ function showEndScreen(kind, winner) {
     <div class="screen-inner">
       <h2 class="screen-title ${kind}">${title}</h2>
       <div class="score-list">${rows}</div>
+      <button class="btn" id="endBack">Volver al menú</button>
       <p class="screen-hint">Pulsa A, B o Enter para volver al menú</p>
     </div>`;
   screenEls = {};
+  document.getElementById("endBack").onclick = () => returnToMenu();
   screenEl.classList.remove("hidden");
 }
 

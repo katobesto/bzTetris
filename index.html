@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>TETRIS</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
@@ -29,6 +29,23 @@
       <div class="pad-status" id="padStatus">No hay mandos conectados — conecta uno y pulsa cualquier botón</div>
       <button class="btn close-btn" onclick="closeSettings()">Cerrar (Esc)</button>
     </div>
+  </div>
+
+  <!-- Touch controls: shown on touch devices during play (and the pause button).
+       Wired up in input.js (touchpad.js logic lives there). Hidden by default. -->
+  <div class="touchpad hidden" id="touchpad">
+    <div class="tp-dpad">
+      <button class="tp-btn tp-left"  data-act="left"  aria-label="Izquierda">&#9664;</button>
+      <button class="tp-btn tp-down"  data-act="down"  aria-label="Abajo">&#9660;</button>
+      <button class="tp-btn tp-right" data-act="right" aria-label="Derecha">&#9654;</button>
+    </div>
+    <div class="tp-actions">
+      <button class="tp-btn tp-ccw"  data-act="rotateCCW" aria-label="Girar antihorario">&#8634;</button>
+      <button class="tp-btn tp-cw"   data-act="rotateCW"  aria-label="Girar horario">&#8635;</button>
+      <button class="tp-btn tp-drop" data-act="hardDrop"  aria-label="Caída dura">&#10515;</button>
+      <button class="tp-btn tp-hold" data-act="hold"      aria-label="Guardar">&#8645;</button>
+    </div>
+    <button class="tp-btn tp-pause" id="tpPause" aria-label="Pausa">&#10074;&#10074;</button>
   </div>
 
   <!-- Background music is managed entirely by javascript/music.js, which creates its own

@@ -280,6 +280,67 @@ window.addEventListener("keyup", (e) => {
 });
 
 /* ============================================================
+ * TOUCH CONTROLS — on-screen pad for touch devices.
+ * Reuses the exact same pressDir/releaseDir (DAS/ARR + soft drop)
+ * and dispatchAction paths as the keyboard, so behaviour is identical.
+ * The pad drives the local player: slot 0 in local play, mySlot online.
+ * ============================================================ */
+const isTouchDevice = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
+const touchpadEl = document.getElementById("touchpad");
+let touchpadVisible = false;
+
+function touchSlot() { return online ? mySlot : 0; }
+
+// Show the pad only while playing on a touch device (menus have their own buttons).
+function updateTouchpad() {
+  const want = isTouchDevice && state === State.PLAYING;
+  if (want === touchpadVisible) return;
+  touchpadVisible = want;
+  if (touchpadEl) touchpadEl.classList.toggle("hidden", !want);
+  if (!want) { // release any held directions so they don't leak into the next match
+    const s = touchSlot();
+    for (const d of ["left", "right", "down"]) releaseDir(s, d);
+  }
+}
+
+if (touchpadEl && isTouchDevice) {
+  // Direction buttons: hold to repeat (DAS/ARR + soft drop), like holding an arrow key.
+  for (const btn of touchpadEl.querySelectorAll(".tp-dpad .tp-btn")) {
+    const act = btn.dataset.act;
+    const down = (e) => {
+      e.preventDefault();
+      if (state !== State.PLAYING) return;
+      pressDir(touchSlot(), act);
+    };
+    const up = (e) => { e.preventDefault(); releaseDir(touchSlot(), act); };
+    btn.addEventListener("pointerdown", down);
+    btn.addEventListener("pointerup", up);
+    btn.addEventListener("pointercancel", up);
+    btn.addEventListener("pointerleave", up);
+    btn.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
+  // One-shot action buttons: rotate CW/CCW, hard drop, hold.
+  for (const btn of touchpadEl.querySelectorAll(".tp-actions .tp-btn")) {
+    const act = btn.dataset.act;
+    btn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      if (state !== State.PLAYING) return;
+      dispatchAction(touchSlot(), act);
+    });
+    btn.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
+  // Pause button.
+  const pauseBtn = document.getElementById("tpPause");
+  if (pauseBtn) {
+    pauseBtn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      if (state === State.PLAYING) pauseGame();
+      else if (state === State.PAUSED) resumeGame();
+    });
+  }
+}
+
+/* ============================================================
  * GAMEPADS — up to 4 pads; each pad claims a player slot
  * dynamically in activation order (see claimSlot).
  * P1's pad (index 0) is the one that can be captured in settings.
