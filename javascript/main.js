@@ -31,6 +31,7 @@ function update(dt, now) {
     for (const pl of players) {
       updateParticles(pl, dt);
       updatePopups(pl, dt);
+      if (pl.garbageFlash > 0) pl.garbageFlash = Math.max(0, pl.garbageFlash - dt / 0.4); // fade over 0.4s
     }
     updateShake(dt);
   }

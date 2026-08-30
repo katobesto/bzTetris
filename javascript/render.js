@@ -155,6 +155,12 @@ function renderPlayer(pl) {
     for (const r of pl.clearing.rows) ctx.fillRect(0, r * pl.cell, COLS * pl.cell, pl.cell);
   }
 
+  // Garbage flash: red overlay fading out when garbage rows land.
+  if (pl.garbageFlash > 0) {
+    ctx.fillStyle = `rgba(255,45,85,${pl.garbageFlash * 0.35})`;
+    ctx.fillRect(0, 0, COLS * pl.cell, ROWS * pl.cell);
+  }
+
   // Ghost piece + active piece
   if (pl.piece && !pl.clearing) {
     const ghost = { ...pl.piece };

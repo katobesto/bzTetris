@@ -47,6 +47,7 @@ function makePlayer(slot) {
     gravAcc: 0, lockTimer: 0, clearing: null,
     // per-player effects (drawn on this player's own canvas)
     particles: [], popups: [],
+    garbageFlash: 0, // 0..1 red flash when garbage lands (render.js)
     // DOM/canvas refs + sizing (filled by buildColumns)
     cell: CELL, miniCell: MINI_CELL, nextSlotH: 64,
     ctx: null, nextCtx: null, holdCtx: null,
@@ -64,6 +65,7 @@ function resetPlayer(pl) {
   pl.score = 0; pl.level = 1; pl.linesCleared = 0;
   pl.gravAcc = 0; pl.lockTimer = 0; pl.clearing = null;
   pl.particles.length = 0; pl.popups.length = 0;
+  pl.garbageFlash = 0;
   if (pl.elOutBadge) pl.elOutBadge.classList.add("hidden");
 }
 
@@ -118,6 +120,7 @@ function markOut(pl) {
   pl.alive = false;
   pl.outAt = performance.now();
   pl.piece = null;
+  sfxOut(); // elimination sound (top-out or garbage overflow)
   if (pl.elOutBadge) pl.elOutBadge.classList.remove("hidden");
   if (online) sendOut();
   else checkMatchEnd();
@@ -212,9 +215,11 @@ function finalizeClearing(pl) {
   pl.linesCleared += n;
   pl.level = 1 + Math.floor(pl.linesCleared / 10);
 
-  // Online: attack rivals with garbage rows equal to the lines cleared.
-  if (online) {
-    const rivals = players.filter(p => p.slot !== mySlot && p.alive).map(p => p.slot);
+  // Attack rivals with garbage rows equal to the lines cleared. Works in
+  // online play (relayed by the server) AND local multiplayer (applied
+  // directly to the target players on this machine).
+  if (online || players.length > 1) {
+    const rivals = players.filter(p => p.slot !== pl.slot && p.alive).map(p => p.slot);
     let targets;
     if (n >= 4) targets = "all";
     else {
@@ -223,7 +228,7 @@ function finalizeClearing(pl) {
     }
     const garbageRows = [];
     for (let i = 0; i < n; i++) garbageRows.push(generateGarbageRow());
-    sendGarbage(garbageRows, targets);
+    fireGarbage(pl, garbageRows, targets);
   }
 
   lineExplosion(pl, rows, n === 4);
@@ -303,14 +308,46 @@ function sendGarbage(rows, targets) {
   sendNet({ t: "garbage", rows, targets });
 }
 
+// Fire garbage at the chosen targets. Online: relayed by the server. Local
+// multiplayer: applied directly to the target players on this machine.
+// targets: "all" or an array of rival slots.
+function fireGarbage(pl, rows, targets) {
+  // Victory sound: the player just landed a clear and is throwing garbage.
+  sfxAttack(rows.length);
+  if (online) {
+    sendGarbage(rows, targets);
+    return;
+  }
+  // Local: apply the rows to each target right now.
+  const targetSlots = targets === "all"
+    ? players.filter(p => p.slot !== pl.slot && p.alive).map(p => p.slot)
+    : targets;
+  for (const slot of targetSlots) {
+    const victim = players[slot];
+    if (!victim || !victim.alive) continue;
+    applyGarbage(victim, rows);
+    onGarbageLanded(victim, rows.length, pl);
+  }
+}
+
 // Called by net.js when a garbage message arrives from a rival.
 function onGarbageReceived(from, rows) {
   const pl = players[mySlot];
   if (!pl) return;
   applyGarbage(pl, rows);
-  // Visual feedback: a brief shake + popup on the local board.
+  onGarbageLanded(pl, rows.length, players[from]);
+}
+
+// Shared feedback when garbage lands on a player: sound + red flash + shake
+// + popup. Works for both online (received) and local (applied) garbage.
+function onGarbageLanded(pl, rows, from) {
+  if (!pl || !pl.alive) return;
+  sfxGarbageHit(rows);
+  pl.garbageFlash = 1; // red flash on this player's board (render.js)
   triggerShake(3, 120);
+  const who = from && from.name ? from.name : (from ? "P" + (from.slot + 1) : "");
   addPopup(pl, "¡BASURA!", COLS * pl.cell / 2, ROWS * pl.cell * 0.5, 24, "#ff4d6d");
+  if (who) addPopup(pl, who, COLS * pl.cell / 2, ROWS * pl.cell * 0.5 + 26, 16, "#ffb3c1");
 }
 
 // Called by net.js when a rival is reported out by the server.
