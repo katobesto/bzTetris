@@ -76,6 +76,22 @@ function stopMusic() {
   musicMode = "off";
 }
 
+// Pause the current track in place: fade both variants out (only one is
+// audible at a time) and keep the position so resumeMusic() continues there.
+function pauseMusic() {
+  if (musicMode === "off") return;
+  fadeAudio(musicAudio[musicTrack].normal, 0, true);
+  fadeAudio(musicAudio[musicTrack].danger, 0, true);
+}
+
+// Resume the track that was active when pauseMusic() ran.
+function resumeMusic() {
+  if (musicMode === "off") return;
+  const a = musicAudio[musicTrack][musicMode];
+  a.play().catch(() => {});
+  fadeAudio(a, MUSIC_VOLUME);
+}
+
 // Stack height: rows from the floor up to the highest locked cell.
 // Multiplayer: the max over all alive players (danger if ANY is >= threshold).
 function stackHeight() {

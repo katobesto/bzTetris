@@ -356,7 +356,7 @@ let capture = null; // { action, input } while waiting for a new key/pad button
 let settingsPausedGame = false;
 
 function openSettings() {
-  if (state === State.PLAYING) { state = State.PAUSED; settingsPausedGame = true; }
+  if (state === State.PLAYING) { state = State.PAUSED; settingsPausedGame = true; pauseMusic(); }
   else settingsPausedGame = false;
   renderBindTable();
   updatePadStatus();
@@ -369,7 +369,7 @@ function closeSettings() {
   settingsOpen = false;
   capture = null;
   settingsEl.classList.add("hidden");
-  if (settingsPausedGame) state = State.PLAYING; // resume silently (no overlay flash)
+  if (settingsPausedGame) { state = State.PLAYING; resumeMusic(); } // resume silently (no overlay flash)
   settingsPausedGame = false;
 }
 

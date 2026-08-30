@@ -277,6 +277,7 @@ function returnToMenu() {
 function pauseGame() {
   if (state !== State.PLAYING) return;
   state = State.PAUSED;
+  pauseMusic();
   showPaused();
 }
 
@@ -284,4 +285,5 @@ function resumeGame() {
   if (state !== State.PAUSED) return;
   hideScreen();
   state = State.PLAYING;
+  resumeMusic();
 }
