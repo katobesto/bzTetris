@@ -325,10 +325,13 @@ function showLobby() {
   const me = onlinePlayers.find(p => p.slot === mySlot);
   const isHost = me ? me.isHost : false;
   const rows = onlinePlayers.map(p => {
-    const ready = p.ready ? '<span class="slot-ready">LISTO</span>' : '<span class="slot-waiting">esperando…</span>';
+    const ghost = p.ghost;
+    const ready = ghost
+      ? '<span class="slot-waiting">reconectando…</span>'
+      : (p.ready ? '<span class="slot-ready">LISTO</span>' : '<span class="slot-waiting">esperando…</span>');
     const hostTag = p.isHost ? ' <span class="host-tag">ANFITRIÓN</span>' : "";
     const meTag = p.slot === mySlot ? ' <span class="me-tag">(tú)</span>' : "";
-    return `<div class="wait-slot${p.ready ? " ready" : ""}"><span class="slot-label">P${p.slot + 1}</span><span class="slot-src">${escapeHtml(p.name)}${hostTag}${meTag}</span>${ready}</div>`;
+    return `<div class="wait-slot${p.ready && !ghost ? " ready" : ""}${ghost ? " ghost" : ""}"><span class="slot-label">P${p.slot + 1}</span><span class="slot-src">${escapeHtml(p.name)}${hostTag}${meTag}</span>${ready}</div>`;
   }).join("");
   const emptyCount = 4 - onlinePlayers.length;
   const emptyRows = Array.from({ length: emptyCount }, (_, i) =>

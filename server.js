@@ -17,6 +17,9 @@ const ROOT = __dirname;
 const MAX_PLAYERS = 4;
 const COLS = 10; // must match constants.js
 const ROWS = 20; // must match constants.js
+// How long a dropped player's slot is held (as a "ghost") so their client can
+// rejoin after a network blip / proxy idle-timeout drop. Cleared by the sweep.
+const REJOIN_GRACE_MS = 60000;
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -90,7 +93,9 @@ function genCode() {
 }
 
 function makeRoom(code) {
-  return { code, slots: [null, null, null, null], started: false, winner: -1 };
+  // ghosts: slot -> { name, ready, leftAt } — a dropped lobby player's slot,
+  // held for REJOIN_GRACE_MS so their client can rejoin after a drop.
+  return { code, slots: [null, null, null, null], started: false, winner: -1, ghosts: {} };
 }
 
 function occupied(room) { return room.slots.filter(s => s !== null); }
@@ -106,6 +111,13 @@ function roomPlayers(room) {
   room.slots.forEach((p, i) => {
     if (p) out.push({ slot: i, name: p.name, ready: p.ready, alive: p.alive, isHost: i === host });
   });
+  // Ghost slots (dropped lobby players) show up so the room doesn't look empty
+  // while their client reconnects.
+  for (const i of Object.keys(room.ghosts)) {
+    const g = room.ghosts[i];
+    if (!g) continue;
+    out.push({ slot: Number(i), name: g.name, ready: g.ready, alive: true, isHost: false, ghost: true });
+  }
   return out;
 }
 
@@ -146,6 +158,38 @@ function checkEnd(room) {
  * ============================================================ */
 const wss = new WebSocketServer({ server });
 
+// Heartbeat: keep idle WebSockets alive so reverse proxies / load balancers
+// (Traefik, nginx, cloud LBs, VPS firewalls) don't drop them on their idle
+// timeout. Ping every 30s; terminate any client that fails to pong in time.
+// This is what stops "la conexión se pierde" on the VPS — the socket stays
+// open through the lobby and pauses where no game traffic flows.
+const HEARTBEAT_MS = 30000;
+const heartbeat = setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.isAlive === false) { ws.terminate(); continue; }
+    ws.isAlive = false;
+    try { ws.ping(); } catch { /* socket already gone */ }
+  }
+  // Sweep expired ghost slots (dropped lobby players who didn't rejoin in time).
+  const now = Date.now();
+  for (const room of rooms.values()) {
+    let changed = false;
+    for (const i of Object.keys(room.ghosts)) {
+      if (now - room.ghosts[i].leftAt > REJOIN_GRACE_MS) { delete room.ghosts[i]; changed = true; }
+    }
+    if (changed) {
+      if (occupied(room).length === 0 && !Object.keys(room.ghosts).length) rooms.delete(room.code);
+      else broadcast(room, { t: "lobby", players: roomPlayers(room) });
+    }
+  }
+}, HEARTBEAT_MS);
+heartbeat.unref(); // don't keep the process alive (tests / graceful shutdown)
+
+wss.on("connection", (ws) => {
+  ws.isAlive = true;
+  ws.on("pong", () => { ws.isAlive = true; });
+});
+
 wss.on("connection", (ws) => {
   let player = null; // { id, name, ready, alive, ws, room, slot }
 
@@ -171,10 +215,27 @@ wss.on("connection", (ws) => {
         if (occupied(room).length >= MAX_PLAYERS) { ws.send(JSON.stringify({ t: "error", msg: "La sala está llena" })); return; }
         if (room.started) { ws.send(JSON.stringify({ t: "error", msg: "La partida ya ha comenzado" })); return; }
         let slot = -1;
-        for (let i = 0; i < room.slots.length; i++) if (!room.slots[i]) { slot = i; break; }
-        player = { id: code + "-" + slot, name: String(msg.name || "Jugador").slice(0, 16), ready: false, alive: true, ws, room, slot };
+        let rejoining = false;
+        // Rejoin: if the client asks for its old slot and it's still held as a
+        // ghost (dropped, not voluntarily left), restore it with name/ready.
+        if (typeof msg.slot === "number" && room.ghosts[msg.slot] && !room.slots[msg.slot]) {
+          slot = msg.slot;
+          rejoining = true;
+        }
+        if (slot === -1) {
+          for (let i = 0; i < room.slots.length; i++) if (!room.slots[i]) { slot = i; break; }
+        }
+        if (slot === -1) { ws.send(JSON.stringify({ t: "error", msg: "La sala está llena" })); return; }
+        const ghost = rejoining ? room.ghosts[slot] : null;
+        player = {
+          id: code + "-" + slot,
+          name: (ghost ? ghost.name : String(msg.name || "Jugador")).slice(0, 16),
+          ready: rejoining ? !!ghost.ready : false,
+          alive: true, ws, room, slot
+        };
         room.slots[slot] = player;
-        sendTo(player, { t: "joined", room: code, slot, players: roomPlayers(room) });
+        if (ghost) delete room.ghosts[slot];
+        sendTo(player, { t: "joined", room: code, slot, players: roomPlayers(room), rejoined: rejoining });
         broadcast(room, { t: "lobby", players: roomPlayers(room) }, player.id);
         break;
       }
@@ -256,7 +317,7 @@ wss.on("connection", (ws) => {
       }
 
       case "leave": {
-        if (player) leaveRoom(player);
+        if (player) leaveRoom(player, true); // voluntary: don't hold a ghost
         break;
       }
     }
@@ -266,20 +327,25 @@ wss.on("connection", (ws) => {
   ws.on("error", () => { if (player) leaveRoom(player); });
 });
 
-function leaveRoom(player) {
+function leaveRoom(player, voluntary) {
   const room = player.room;
   if (!room) return;
   player.room = null;
-  room.slots[player.slot] = null;
-  if (occupied(room).length === 0) { rooms.delete(room.code); return; }
+  const slot = player.slot;
+  room.slots[slot] = null;
+  if (occupied(room).length === 0 && !Object.keys(room.ghosts).length) { rooms.delete(room.code); return; }
   if (room.started) {
     // A player dropped mid-match: they are out. Notify the others and re-evaluate.
     if (player.alive) {
       player.alive = false;
-      broadcast(room, { t: "out", slot: player.slot });
+      broadcast(room, { t: "out", slot });
     }
     checkEnd(room);
   } else {
+    // Lobby: hold the slot as a ghost (unless they left on purpose) so the
+    // client can rejoin after a drop, and show it as "reconnecting".
+    if (!voluntary) room.ghosts[slot] = { name: player.name, ready: player.ready, leftAt: Date.now() };
+    else delete room.ghosts[slot];
     broadcast(room, { t: "lobby", players: roomPlayers(room) });
   }
 }

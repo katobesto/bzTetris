@@ -10,6 +10,9 @@
  * ============================================================ */
 let ws = null;
 let netRetry = 0;
+let netReconnectTimer = null;
+let netIntentionalClose = false; // true when the user leaves / navigates away
+let netName = "";               // last name used, so a reconnect can rejoin as the same player
 
 function netUrl() {
   const proto = location.protocol === "https:" ? "wss://" : "ws://";
@@ -22,6 +25,11 @@ function connectNet() {
   ws.onopen = () => {
     netConnected = true;
     netRetry = 0;
+    // If we were in a lobby and the socket dropped, rejoin it (restores our slot).
+    // (Mid-match drops are already "out" — rejoining a started room is rejected.)
+    if (roomCode && state === State.LOBBY) {
+      sendNet({ t: "join", code: roomCode, name: netName, slot: mySlot });
+    }
     if (state === State.NET_MENU || state === State.LOBBY) refreshScreen();
   };
   ws.onmessage = (ev) => {
@@ -32,13 +40,48 @@ function connectNet() {
   ws.onclose = () => {
     const wasConnected = netConnected;
     netConnected = false;
-    // If we were mid-match or in a lobby, surface the disconnect.
-    if (wasConnected && (state === State.PLAYING || state === State.LOBBY || state === State.COUNTDOWN)) {
+    if (netIntentionalClose) return;
+    if (wasConnected && roomCode && state === State.LOBBY) {
+      // In the lobby: auto-reconnect and rejoin (server holds our slot).
+      scheduleReconnect();
+    } else if (wasConnected && (state === State.PLAYING || state === State.COUNTDOWN || state === State.LOBBY)) {
+      // Mid-match drop (or lobby with no room): the player is out; just surface it.
       netError = "Conexión perdida";
       if (state === State.LOBBY) refreshScreen();
     }
   };
   ws.onerror = () => { /* onclose follows */ };
+}
+
+// Reconnect with exponential backoff (1s, 2s, 4s, … capped at 8s). The server
+// holds our slot as a "ghost" for REJOIN_GRACE_MS, so rejoining restores it.
+function scheduleReconnect() {
+  if (netReconnectTimer) return;
+  netError = "Reconectando…";
+  if (state === State.LOBBY) refreshScreen();
+  const delay = Math.min(1000 * Math.pow(2, netRetry), 8000);
+  netRetry++;
+  netReconnectTimer = setTimeout(() => {
+    netReconnectTimer = null;
+    if (netIntentionalClose) return;
+    if (ws) { try { ws.close(); } catch { /* already closed */ } ws = null; }
+    connectNet();
+  }, delay);
+}
+
+// Voluntary disconnect (user left the room / went home). Stops auto-reconnect.
+function closeNet() {
+  netIntentionalClose = true;
+  if (netReconnectTimer) { clearTimeout(netReconnectTimer); netReconnectTimer = null; }
+  if (ws) { try { ws.close(); } catch { /* already closed */ } ws = null; }
+  netConnected = false;
+  netRetry = 0;
+}
+
+// Re-arm reconnect (e.g. after a fresh create/join from the net menu).
+function armNet() {
+  netIntentionalClose = false;
+  netRetry = 0;
 }
 
 function sendNet(msg) {
@@ -49,13 +92,17 @@ function sendNet(msg) {
  * ROOM ACTIONS
  * ============================================================ */
 function createRoom(name) {
+  netName = name || "Jugador";
+  armNet();
   connectNet();
-  sendNet({ t: "create", name: name || "Jugador" });
+  sendNet({ t: "create", name: netName });
 }
 
 function joinRoom(code, name) {
+  netName = name || "Jugador";
+  armNet();
   connectNet();
-  sendNet({ t: "join", code, name: name || "Jugador" });
+  sendNet({ t: "join", code, name: netName });
 }
 
 function setReady(ready) {

@@ -434,8 +434,9 @@ function returnHome() {
   for (const pl of players) { pl.particles.length = 0; pl.popups.length = 0; }
   shake.t = 0; shake.mag = 0;
   resetSlotAssignment();
-  // Tell the server we're leaving the room (if in one).
+  // Tell the server we're leaving the room (if in one) and stop auto-reconnect.
   if (roomCode) sendNet({ t: "leave" });
+  closeNet();
   online = false;
   onlinePlayers = [];
   onlineWinner = -1;
