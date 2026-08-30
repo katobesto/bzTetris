@@ -44,6 +44,13 @@ const server = http.createServer((req, res) => {
   }
   if (pathname === "/") pathname = "/index.html";
 
+  // Health endpoint (used by the Docker HEALTHCHECK and Coolify)
+  if (pathname === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "ok", uptime: Math.floor(process.uptime()) }));
+    return;
+  }
+
   const filePath = path.join(ROOT, pathname);
   // Block path traversal: the resolved path must stay inside ROOT.
   if (!filePath.startsWith(ROOT + path.sep)) {
