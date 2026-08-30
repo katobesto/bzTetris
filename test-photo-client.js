@@ -88,12 +88,13 @@ setTimeout(() => {
     " ];" +
     "})()");
 
-  // 1. showLobby renders a camera button on my slot and a letter avatar on Bob's.
+  // 1. showLobby renders a camera LABEL on my slot and a letter avatar on Bob's.
   G("showLobby()");
-  const camBtn = G("document.getElementById('lobbyCamBtn')");
-  ok(!!camBtn, "Lobby has a camera button on my slot");
-  const camInner = G("document.querySelector('#lobbyCamBtn .lobby-avatar-inner')");
-  ok(!!camInner && camInner.classList.contains("has-photo"), "My camera button shows my photo (has-photo)");
+  const camLabel = G("document.querySelector('label[for=\"photoInput\"]')");
+  ok(!!camLabel && camLabel.classList.contains("lobby-avatar") && camLabel.classList.contains("cam"),
+    "Lobby has a camera <label for=photoInput> on my slot");
+  const camInner = G("document.querySelector('label[for=\"photoInput\"] .lobby-avatar-inner')");
+  ok(!!camInner && camInner.classList.contains("has-photo"), "My camera label shows my photo (has-photo)");
   const bobAvatar = G("Array.from(document.querySelectorAll('.lobby-avatar')).find(el => !el.classList.contains('cam'))");
   ok(!!bobAvatar && bobAvatar.textContent === "B", "Bob's lobby avatar shows letter fallback 'B'");
 

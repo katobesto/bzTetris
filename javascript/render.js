@@ -472,8 +472,11 @@ function showLobby() {
   const startBtn = document.getElementById("lobbyStart");
   if (startBtn) startBtn.onclick = () => hostStart();
   document.getElementById("lobbyLeave").onclick = () => returnHome();
-  const camBtn = document.getElementById("lobbyCamBtn");
-  if (camBtn) camBtn.onclick = onLobbyCameraClick;
+  // The camera control is a <label for="photoInput">: tapping it activates the
+  // hidden file input natively (reliable on Android). We only need to prepare
+  // the input (reset value + attach the change handler) before the picker opens.
+  const camLabel = document.querySelector('label[for="photoInput"]');
+  if (camLabel) camLabel.onclick = preparePhotoInput;
   screenEl.classList.remove("hidden");
 }
 
@@ -486,14 +489,19 @@ function lobbyAvatarSpan(p) {
 }
 function lobbyCameraAvatar(p) {
   const ph = p.photo;
-  return `<button class="lobby-avatar cam" id="lobbyCamBtn" title="Subir o cambiar tu foto">
-    <span class="lobby-avatar-inner${ph ? " has-photo" : ""}"${ph ? ` style="background-image:url(&quot;${ph}&quot;)"` : ""}>📷</span>
-  </button>`;
+  // A <label for="photoInput"> activates the hidden file input natively when
+  // tapped — the most reliable way to open the picker on Android tablets (a
+  // programmatic .click() on a display:none input can be ignored there).
+  return `<label class="lobby-avatar cam" for="photoInput" title="Subir o cambiar tu foto">
+    <span class="lobby-avatar-inner${ph ? " has-photo" : ""}"${ph ? ` style="background-image:url(&quot;${ph}&quot;)"` : ""}>${ph ? "" : '<i class="fa-solid fa-camera" aria-hidden="true"></i>'}</span>
+  </label>`;
 }
 
-// Camera button in the lobby: open the file picker, resize the chosen image
-// to a small JPEG data URL and send it to the room (server rebroadcasts it).
-function onLobbyCameraClick() {
+// Camera control in the lobby: the <label for="photoInput"> opens the file
+// picker natively when tapped (reliable on Android). This handler only prepares
+// the input — reset its value (so re-selecting the same file still fires
+// change) and attach the change handler that resizes + uploads the image.
+function preparePhotoInput() {
   const input = document.getElementById("photoInput");
   if (!input) return;
   input.value = ""; // allow re-selecting the same file
@@ -521,7 +529,6 @@ function onLobbyCameraClick() {
     reader.onerror = () => { netError = "No se pudo leer el archivo"; showLobby(); };
     reader.readAsDataURL(file);
   };
-  input.click();
 }
 
 // Downscale an image (data URL) to a square JPEG data URL so the avatar stays
