@@ -8,13 +8,27 @@
  * PLAYING -> GAMEOVER (all out) / WINNER (one left standing)
  * Any state -> MENU (B/Esc or from the end screens)
  * ============================================================ */
-const State = { MENU: "menu", WAITING: "waiting", COUNTDOWN: "countdown", PLAYING: "playing", PAUSED: "paused", GAMEOVER: "gameover", WINNER: "winner" };
+const State = { HOME: "home", MENU: "menu", NET_MENU: "netmenu", LOBBY: "lobby", WAITING: "waiting", COUNTDOWN: "countdown", PLAYING: "playing", PAUSED: "paused", GAMEOVER: "gameover", WINNER: "winner" };
 
-let state = State.MENU;
+let state = State.HOME;
 let menuCount = 1;          // player count chosen in the menu (1-4)
 const players = [];         // Player objects, one per slot (0..menuCount-1)
 let countdownT = 0;         // ms remaining in the 3-2-1 countdown
 let lastCdShown = -1;
+
+/* ============================================================
+ * ONLINE STATE (Tetris 99-style garbage attack)
+ * online=true when this client is in a networked match. The server is
+ * authoritative for membership/ready/out/end; each client simulates its
+ * own board and applies garbage rows it receives from rivals.
+ * ============================================================ */
+let online = false;
+let mySlot = 0;             // this client's slot in the room
+let roomCode = "";          // 4-char room code
+let onlinePlayers = [];     // [{slot, name, ready, alive, isHost}] from the server
+let onlineWinner = -1;      // slot of the winner (set on end)
+let netConnected = false;   // WebSocket open
+let netError = "";          // last error message to show in the lobby
 
 /* ============================================================
  * PLAYER FACTORY — each player owns board, piece, bag, hold and score.
@@ -86,11 +100,7 @@ function spawnPiece(pl) {
   const piece = { type, x: spawnX(type), y: -1, rot: "0" };
   if (collidesAt(pl, pieceCells(piece))) {
     // Spawn blocked: this player is out. The match may end here.
-    pl.alive = false;
-    pl.outAt = performance.now();
-    pl.piece = null;
-    if (pl.elOutBadge) pl.elOutBadge.classList.remove("hidden");
-    checkMatchEnd();
+    markOut(pl);
     return false;
   }
   pl.piece = piece;
@@ -99,6 +109,18 @@ function spawnPiece(pl) {
   pl.lockTimer = 0;
   drawNext(pl);
   return true;
+}
+
+// Central "player is out" path. Local: re-evaluate the match end.
+// Online: tell the server (it is authoritative for who is out / match end).
+function markOut(pl) {
+  if (!pl.alive) return;
+  pl.alive = false;
+  pl.outAt = performance.now();
+  pl.piece = null;
+  if (pl.elOutBadge) pl.elOutBadge.classList.remove("hidden");
+  if (online) sendOut();
+  else checkMatchEnd();
 }
 
 function tryMove(pl, dx) {
@@ -149,7 +171,7 @@ function doHold(pl) {
     const swap = pl.heldType;
     pl.heldType = cur;
     pl.piece = { type: swap, x: spawnX(swap), y: -1, rot: "0" };
-    if (collidesAt(pl, pieceCells(pl.piece))) { pl.alive = false; pl.outAt = performance.now(); pl.piece = null; checkMatchEnd(); return; }
+    if (collidesAt(pl, pieceCells(pl.piece))) { markOut(pl); return; }
   } else {
     pl.heldType = cur;
     spawnPiece(pl);
@@ -190,6 +212,20 @@ function finalizeClearing(pl) {
   pl.linesCleared += n;
   pl.level = 1 + Math.floor(pl.linesCleared / 10);
 
+  // Online: attack rivals with garbage rows equal to the lines cleared.
+  if (online) {
+    const rivals = players.filter(p => p.slot !== mySlot && p.alive).map(p => p.slot);
+    let targets;
+    if (n >= 4) targets = "all";
+    else {
+      // Pick up to n distinct rivals (shuffled so it's not always the same one).
+      targets = shuffle(rivals.slice()).slice(0, n);
+    }
+    const garbageRows = [];
+    for (let i = 0; i < n; i++) garbageRows.push(generateGarbageRow());
+    sendGarbage(garbageRows, targets);
+  }
+
   lineExplosion(pl, rows, n === 4);
   const labels = ["", "+100", "+300 DOUBLE!", "+500 TRIPLE!", "+800 TETRIS!"];
   addPopup(pl, (n > 1 ? labels[n] : "+" + LINE_SCORES[1]) , COLS * pl.cell / 2, ROWS * pl.cell * 0.3, n === 4 ? 34 : 26, n === 4 ? "#ffd60a" : "#ffffff");
@@ -201,6 +237,123 @@ function finalizeClearing(pl) {
 }
 
 function dropInterval(pl) { return Math.max(1000 * 0.85 ** (pl.level - 1), 70); }
+
+/* ============================================================
+ * GARBAGE ATTACK (online, Tetris 99-style)
+ * Clearing N lines sends N garbage rows to rivals:
+ *   1 line -> 1 rival, 2 -> 2 rivals, 3 -> 3 rivals, 4 (Tetris) -> everyone.
+ * A garbage row is 10 cells with a single T-junction: one gap at a random
+ * column, with a block stacked on top of it.
+ * ============================================================ */
+function generateGarbageRow() {
+  const row = new Array(COLS).fill("G");
+  const gap = (Math.random() * COLS) | 0;
+  row[gap] = null;
+  return { row, gap };
+}
+
+// Apply received garbage rows to a player's board. Rows are pushed from the
+// floor up. If any cell would land above the top of the board, the player is out.
+function applyGarbage(pl, rows) {
+  if (!pl || !pl.alive) return;
+  for (const { row, gap } of rows) {
+    // Push the row in at the bottom: shift everything up by one, place the row at the floor.
+    const topRow = pl.board[0];
+    if (topRow.some(v => v !== null)) {
+      // Board is already full at the top: this garbage overflows -> out.
+      markOut(pl);
+      return;
+    }
+    pl.board.splice(0, 1); // drop the top row (it's empty, guaranteed above)
+    pl.board.push(row.slice());
+    // The T-junction block sits one row above the gap.
+    const gapRow = pl.board[ROWS - 2];
+    if (gapRow && gapRow[gap] === null) gapRow[gap] = "G";
+  }
+  // If the active piece now overlaps the new garbage, nudge it up until it fits.
+  if (pl.piece) {
+    let guard = 0;
+    while (collidesAt(pl, pieceCells(pl.piece)) && guard++ < ROWS) pl.piece.y--;
+    if (collidesAt(pl, pieceCells(pl.piece))) markOut(pl);
+  }
+}
+
+// Compact board encoding for snapshots: 200 chars, one per cell (null -> ".").
+function encodeBoard(board) {
+  let s = "";
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++) s += board[r][c] || ".";
+  return s;
+}
+
+function decodeBoard(s) {
+  const b = emptyBoard();
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++) {
+      const ch = s[r * COLS + c];
+      if (ch && ch !== ".") b[r][c] = ch;
+    }
+  return b;
+}
+
+// Send garbage to the server (relayed to the chosen targets). Called from
+// finalizeClearing when online. targets: "all" or an array of rival slots.
+function sendGarbage(rows, targets) {
+  if (!online || !netConnected) return;
+  sendNet({ t: "garbage", rows, targets });
+}
+
+// Called by net.js when a garbage message arrives from a rival.
+function onGarbageReceived(from, rows) {
+  const pl = players[mySlot];
+  if (!pl) return;
+  applyGarbage(pl, rows);
+  // Visual feedback: a brief shake + popup on the local board.
+  triggerShake(3, 120);
+  addPopup(pl, "GARBAGE!", COLS * pl.cell / 2, ROWS * pl.cell * 0.5, 24, "#ff4d6d");
+}
+
+// Called by net.js when a rival is reported out by the server.
+function onRivalOut(slot) {
+  const pl = players[slot];
+  if (pl && pl.alive) {
+    pl.alive = false;
+    pl.outAt = performance.now();
+    pl.piece = null;
+    if (pl.elOutBadge) pl.elOutBadge.classList.remove("hidden");
+  }
+}
+
+// Called by net.js when the server declares the match over.
+function onOnlineEnd(winnerSlot) {
+  onlineWinner = winnerSlot;
+  stopMusic();
+  const winner = winnerSlot >= 0 ? players[winnerSlot] : null;
+  state = winner ? State.WINNER : State.GAMEOVER;
+  showEndScreen(winner ? "winner" : "gameover", winner);
+}
+
+// Build the local player array for an online match from the server's roster.
+// Slot i maps to players[i]; the local client is players[mySlot].
+function setupOnlineMatch() {
+  online = true;
+  players.length = 0;
+  for (let i = 0; i < 4; i++) {
+    const info = onlinePlayers.find(p => p.slot === i);
+    const pl = makePlayer(i);
+    pl.name = info ? info.name : ("P" + (i + 1));
+    pl.remote = i !== mySlot; // remote players are rendered from snapshots
+    players.push(pl);
+  }
+  buildColumns(4); // always 4 columns online (empty slots show as idle)
+  for (const pl of players) resetPlayer(pl);
+  shake.t = 0; shake.mag = 0;
+  state = State.COUNTDOWN;
+  countdownT = 3000;
+  lastCdShown = -1;
+  showCountdown();
+  startMusic();
+}
 
 /* ============================================================
  * MATCH FLOW — menu, waiting, countdown, end screens
@@ -269,9 +422,32 @@ function returnToMenu() {
   stopMusic();
   for (const pl of players) { pl.particles.length = 0; pl.popups.length = 0; }
   shake.t = 0; shake.mag = 0;
+  if (online) { returnHome(); return; }
   resetSlotAssignment(); // clear slot claims for the next match
   state = State.MENU;
   showMenu(menuCount);
+}
+
+// Leave an online match (or the lobby) and go back to the home screen.
+function returnHome() {
+  stopMusic();
+  for (const pl of players) { pl.particles.length = 0; pl.popups.length = 0; }
+  shake.t = 0; shake.mag = 0;
+  resetSlotAssignment();
+  // Tell the server we're leaving the room (if in one).
+  if (roomCode) sendNet({ t: "leave" });
+  online = false;
+  onlinePlayers = [];
+  onlineWinner = -1;
+  roomCode = "";
+  mySlot = 0;
+  netError = "";
+  // Reset to a single idle board behind the home screen.
+  players.length = 0;
+  players.push(makePlayer(0));
+  buildColumns(1);
+  state = State.HOME;
+  showHome();
 }
 
 function pauseGame() {

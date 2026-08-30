@@ -21,7 +21,8 @@ const COLORS = {
   S: "#3ddc84",
   Z: "#ff4d6d",
   J: "#4d79ff",
-  L: "#ff9f1c"
+  L: "#ff9f1c",
+  G: "#8a8f98" // garbage (online attack rows)
 };
 
 const LINE_SCORES = [0, 100, 300, 500, 800]; // index = lines cleared at once

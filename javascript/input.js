@@ -25,6 +25,9 @@ const PAD_BUTTONS = { 0: "start", 1: "restart", 2: "settings", 3: "hold", 4: "ro
 // Soft-drop repeat rate while ArrowDown / dpad-down is held.
 const SOFT_DROP_MS = 40;
 
+// Home-screen selection (0 = Local Play, 1 = Online Play). Driven by arrows/Enter.
+let homeSelect = 0;
+
 /* ============================================================
  * SETTINGS OVERLAY LABELS (key rebinding table)
  * ============================================================ */
@@ -126,6 +129,22 @@ function claimSlot(inputId) {
  * ============================================================ */
 function dispatchAction(slot, action) {
   switch (state) {
+    case State.HOME:
+      // Navigate the home screen: arrows move the selection, Enter/A confirms.
+      if (action === "left" || action === "down") { homeSelect = 0; refreshHomeSelect(); }
+      else if (action === "right" || action === "up") { homeSelect = 1; refreshHomeSelect(); }
+      else if (action === "start" || action === "Enter") {
+        if (homeSelect === 0) { state = State.MENU; showMenu(menuCount); }
+        else { state = State.NET_MENU; showNetMenu(); }
+      }
+      return;
+
+    case State.NET_MENU:
+    case State.LOBBY:
+      // Text entry is handled directly in the keydown listener (so typing flows
+      // into the focused input). Only Esc (handled there) leaves these screens.
+      return;
+
     case State.MENU:
       // Any input can drive the menu (the slot is irrelevant here).
       if (action === "left") changeMenuCount(-1);
@@ -189,11 +208,34 @@ function keyToAction(e) {
   return null;
 }
 
+// In online mode there is exactly one local player (mySlot); keyboard and pads
+// all drive it. In local mode the slot is whatever the input claimed in WAITING.
+function localSlot(slot) { return online ? mySlot : slot; }
+
 window.addEventListener("keydown", (e) => {
   // Settings overlay: Esc closes it; everything else is swallowed.
   if (settingsOpen) {
     if (e.key === "Escape") closeSettings();
     e.preventDefault();
+    return;
+  }
+
+  // HOME: arrows/Enter navigate the home screen.
+  if (state === State.HOME) {
+    const action = keyToAction(e);
+    if (action || e.code === "Enter") {
+      e.preventDefault();
+      if (!e.repeat) dispatchAction(0, action || "Enter");
+    }
+    return;
+  }
+
+  // NET_MENU / LOBBY: let typing flow into the focused input. Only Esc leaves.
+  if (state === State.NET_MENU || state === State.LOBBY) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      returnHome();
+    }
     return;
   }
 
@@ -224,14 +266,15 @@ window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
 
   // MENU: any input drives the menu (slot is irrelevant).
-  // Otherwise the keyboard controls the slot it claimed in WAITING.
-  const slot = state === State.MENU ? 0 : inputSlot.keyboard;
+  // Otherwise the keyboard controls the slot it claimed in WAITING (local) or
+  // mySlot (online, where the keyboard never claims a slot).
+  const slot = state === State.MENU ? 0 : localSlot(inputSlot.keyboard);
   if (slot === null) return; // keyboard never joined; it controls no player
   dispatchAction(slot, action);
 });
 
 window.addEventListener("keyup", (e) => {
-  const slot = inputSlot.keyboard;
+  const slot = localSlot(inputSlot.keyboard);
   if (slot === null) return;
   for (const dir of ["left", "right", "down"]) if (binds[dir] === e.code) releaseDir(slot, dir);
 });
@@ -315,7 +358,8 @@ function pollGamepads() {
       }
     }
 
-    const slot = inputSlot[inputId];
+    // Online: any connected pad drives mySlot (no slot claiming happens online).
+    const slot = online ? mySlot : inputSlot[inputId];
 
     // Edge-triggered actions (only for pads that own a slot).
     if (!joinedNow && slot !== null) {

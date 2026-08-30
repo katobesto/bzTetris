@@ -6,6 +6,7 @@
  * GAME LOOP
  * ============================================================ */
 let lastTime = performance.now();
+let snapAcc = 0; // accumulator for the 10 Hz online snapshot timer
 
 function frame(now) {
   const dt = Math.min((now - lastTime) / 1000, 0.1); // clamp to avoid huge jumps after tab switch
@@ -39,10 +40,19 @@ function update(dt, now) {
   if (state !== State.PLAYING) return;
 
   for (const pl of players) {
+    // Online: only simulate the local player. Rivals are rendered from
+    // snapshots (applyRemoteSnapshot) and their physics run on their own machines.
+    if (online && pl.remote) continue;
     // Skip dead players, but keep ticking a player mid line-clear: during the
     // clear animation pl.piece is null yet pl.clearing must still advance.
     if (!pl.alive || (!pl.piece && !pl.clearing)) continue;
     updatePlayer(pl, dt, now);
+  }
+
+  // Online: stream our board to rivals at 10 Hz so they can render us.
+  if (online) {
+    snapAcc += dt;
+    if (snapAcc >= 0.1) { snapAcc = 0; sendSnapshot(); }
   }
 }
 
@@ -73,9 +83,11 @@ function updatePlayer(pl, dt, now) {
 }
 
 /* ============================================================
- * BOOT — build the initial (empty) columns behind the menu and start.
+ * BOOT — build the initial (empty) columns behind the home screen and start.
  * ============================================================ */
-players.push(makePlayer(0)); // placeholder so empty boards show behind the menu
+players.push(makePlayer(0)); // placeholder so an empty board shows behind the home screen
 buildColumns(1);
-showMenu(menuCount);
+connectNet();   // open the WebSocket so online play is ready (net.js)
+state = State.HOME;
+showHome();
 requestAnimationFrame(frame);

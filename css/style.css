@@ -270,3 +270,49 @@ body {
 .pad-status .on { color: #43e97b; }
 
 .close-btn { width: 100%; }
+
+/* ============================================================
+ * ONLINE SCREENS (home / net menu / lobby)
+ * ============================================================ */
+.home-buttons { display: flex; flex-direction: column; gap: 12px; width: min(320px, 80vw); margin: 8px 0; }
+.home-btn { width: 100%; font-size: 17px; padding: 14px 26px; }
+.home-btn.selected {
+  border-color: #00e5ff;
+  box-shadow: 0 0 24px rgba(0, 229, 255, 0.4), inset 0 0 18px rgba(0, 229, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+.net-form { display: flex; flex-direction: column; gap: 12px; width: min(340px, 82vw); margin: 6px 0; }
+.net-label { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: rgba(232, 236, 244, 0.5); text-align: left; }
+.net-input {
+  width: 100%;
+  padding: 11px 14px;
+  font-size: 16px;
+  letter-spacing: 1px;
+  color: #e8ecf4;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 9px;
+  outline: none;
+}
+.net-input:focus { border-color: rgba(0, 229, 255, 0.5); box-shadow: 0 0 14px rgba(0, 229, 255, 0.2); }
+.net-row { display: flex; gap: 10px; }
+.net-row .btn { flex: 1; }
+.join-row .code-input { flex: 1; text-transform: uppercase; text-align: center; letter-spacing: 6px; font-weight: 800; }
+.net-error { color: #ff4d5e; }
+.screen-hint .on { color: #43e97b; }
+.screen-hint .off { color: #ffd60a; }
+
+.room-code-row { display: flex; align-items: center; gap: 14px; margin: 4px 0 10px; }
+.room-code-label { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: rgba(232, 236, 244, 0.5); }
+.room-code {
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 10px;
+  text-indent: 10px;
+  color: #00e5ff;
+  text-shadow: 0 0 24px rgba(0, 229, 255, 0.5);
+}
+.lobby-actions { display: flex; gap: 12px; align-items: center; margin-top: 6px; flex-wrap: wrap; justify-content: center; }
+.host-tag { color: #ffd60a; font-size: 10px; font-weight: 800; letter-spacing: 1px; }
+.me-tag { color: #00e5ff; font-size: 11px; }

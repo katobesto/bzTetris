@@ -38,12 +38,13 @@ function buildColumns(n) {
     const pl = players[i];
     if (!pl) continue;
     pl.cell = cell; pl.miniCell = mini; pl.nextSlotH = slotH;
+    const label = (online && pl.name) ? pl.name : ("P" + (i + 1));
 
     const col = document.createElement("div");
     col.className = "player-col";
     col.innerHTML = `
       <div class="col-header">
-        <span class="p-label">P${i + 1}</span>
+        <span class="p-label">${escapeHtml(label)}</span>
         <span class="pad-dot" id="padDot-${i}"></span>
         <span class="out-badge hidden" id="outBadge-${i}">OUT</span>
       </div>
@@ -182,7 +183,9 @@ function drawNext(pl) {
   const ctx = pl.nextCtx;
   if (!ctx) return;
   ctx.clearRect(0, 0, pl.miniW || 96, (pl.nextSlotH || 64) * 3);
-  refillQueue(pl);
+  // Local players: top up the queue from their bag. Remote players: the queue
+  // comes verbatim from snapshots — do NOT refill (it would corrupt it).
+  if (!pl.remote) refillQueue(pl);
   for (let i = 0; i < 3 && i < pl.queue.length; i++)
     drawMiniPiece(ctx, pl.queue[i], (pl.miniW || 96) / 2, (pl.nextSlotH || 64) / 2 + i * (pl.nextSlotH || 64), pl.miniCell);
 }
@@ -243,6 +246,107 @@ function updateMenuPadsLine() {
     : `Controllers connected: ${n}`;
 }
 
+/* ============================================================
+ * ONLINE SCREENS (home / net menu / lobby)
+ * ============================================================ */
+function showHome() {
+  screenKind = "home";
+  screenEl.innerHTML = `
+    <div class="screen-inner">
+      <h2 class="screen-title">TETRIS</h2>
+      <div class="home-buttons">
+        <button class="btn home-btn" id="homeLocal">Local Play</button>
+        <button class="btn home-btn" id="homeOnline">Online Play</button>
+      </div>
+      <p class="screen-hint">Local: 1-4 players on this machine &middot; Online: garbage-attack multiplayer</p>
+    </div>`;
+  screenEls = {};
+  document.getElementById("homeLocal").onclick = () => { state = State.MENU; showMenu(menuCount); };
+  document.getElementById("homeOnline").onclick = () => { state = State.NET_MENU; showNetMenu(); };
+  refreshHomeSelect();
+  screenEl.classList.remove("hidden");
+}
+
+// Highlight the currently selected home option (driven by homeSelect in input.js).
+function refreshHomeSelect() {
+  if (screenKind !== "home") return;
+  const local = document.getElementById("homeLocal");
+  const online = document.getElementById("homeOnline");
+  if (local) local.classList.toggle("selected", homeSelect === 0);
+  if (online) online.classList.toggle("selected", homeSelect === 1);
+}
+
+function showNetMenu() {
+  screenKind = "netmenu";
+  const conn = netConnected ? '<span class="on">connected</span>' : '<span class="off">connecting…</span>';
+  screenEl.innerHTML = `
+    <div class="screen-inner">
+      <h2 class="screen-title">ONLINE</h2>
+      <p class="screen-hint">Server: ${conn}</p>
+      <div class="net-form">
+        <label class="net-label">Your name</label>
+        <input class="net-input" id="netName" maxlength="16" placeholder="Player" />
+        <div class="net-row">
+          <button class="btn" id="netCreate">Create Room</button>
+        </div>
+        <div class="net-row join-row">
+          <input class="net-input code-input" id="netCode" maxlength="4" placeholder="CODE" />
+          <button class="btn" id="netJoin">Join</button>
+        </div>
+      </div>
+      ${netError ? `<p class="screen-hint net-error">${escapeHtml(netError)}</p>` : ""}
+      <p class="screen-hint">Esc to go back</p>
+    </div>`;
+  screenEls = {};
+  const nameEl = document.getElementById("netName");
+  const codeEl = document.getElementById("netCode");
+  if (codeEl) codeEl.value = (codeEl.value || "").toUpperCase();
+  document.getElementById("netCreate").onclick = () => {
+    const name = (nameEl.value || "Player").trim();
+    createRoom(name);
+  };
+  document.getElementById("netJoin").onclick = () => {
+    const code = (codeEl.value || "").trim().toUpperCase();
+    if (code.length !== 4) { netError = "Enter a 4-character code"; showNetMenu(); return; }
+    const name = (nameEl.value || "Player").trim();
+    joinRoom(code, name);
+  };
+  screenEl.classList.remove("hidden");
+}
+
+function showLobby() {
+  screenKind = "lobby";
+  const me = onlinePlayers.find(p => p.slot === mySlot);
+  const isHost = me ? me.isHost : false;
+  const rows = onlinePlayers.map(p => {
+    const ready = p.ready ? '<span class="slot-ready">READY</span>' : '<span class="slot-waiting">waiting…</span>';
+    const hostTag = p.isHost ? ' <span class="host-tag">HOST</span>' : "";
+    const meTag = p.slot === mySlot ? ' <span class="me-tag">(you)</span>' : "";
+    return `<div class="wait-slot${p.ready ? " ready" : ""}"><span class="slot-label">P${p.slot + 1}</span><span class="slot-src">${escapeHtml(p.name)}${hostTag}${meTag}</span>${ready}</div>`;
+  }).join("");
+  const emptyCount = 4 - onlinePlayers.length;
+  const emptyRows = Array.from({ length: emptyCount }, (_, i) =>
+    `<div class="wait-slot"><span class="slot-label">P${onlinePlayers.length + i + 1}</span><span class="slot-src">empty</span><span class="slot-waiting">—</span></div>`
+  ).join("");
+  screenEl.innerHTML = `
+    <div class="screen-inner">
+      <h2 class="screen-title">LOBBY</h2>
+      <div class="room-code-row"><span class="room-code-label">ROOM CODE</span><span class="room-code">${escapeHtml(roomCode)}</span></div>
+      <div class="wait-slots">${rows}${emptyRows}</div>
+      <div class="lobby-actions">
+        <button class="btn" id="lobbyReady">${me && me.ready ? "Unready" : "Ready"}</button>
+        ${isHost ? '<button class="btn" id="lobbyStart">Start Match</button>' : '<p class="screen-hint">Waiting for host to start…</p>'}
+      </div>
+      ${netError ? `<p class="screen-hint net-error">${escapeHtml(netError)}</p>` : ""}
+      <p class="screen-hint">Share the room code with your friends &middot; Esc to leave</p>
+    </div>`;
+  screenEls = {};
+  document.getElementById("lobbyReady").onclick = () => setReady(!(me && me.ready));
+  const startBtn = document.getElementById("lobbyStart");
+  if (startBtn) startBtn.onclick = () => hostStart();
+  screenEl.classList.remove("hidden");
+}
+
 function slotSourceLabel(slot) {
   const owner = slotOwner[slot];
   if (owner === "keyboard") return "Keyboard";
@@ -294,11 +398,12 @@ function showPaused() {
 
 function showEndScreen(kind, winner) {
   screenKind = kind;
-  const title = winner ? `P${winner.slot + 1} WINS!` : "GAME OVER";
+  const title = winner ? (online ? `${winner.name || ("P" + (winner.slot + 1))} WINS!` : `P${winner.slot + 1} WINS!`) : "GAME OVER";
   const rows = players.map(pl => {
     const isWinnerRow = winner && pl === winner;
     const dimmed = winner && !isWinnerRow;
-    return `<div class="score-row${dimmed ? " dim" : ""}${isWinnerRow ? " win" : ""}"><span>P${pl.slot + 1}${dimmed ? " &middot; OUT" : ""}</span><b>${pl.score.toLocaleString("en-US")}</b></div>`;
+    const label = online ? (pl.name || ("P" + (pl.slot + 1))) : ("P" + (pl.slot + 1));
+    return `<div class="score-row${dimmed ? " dim" : ""}${isWinnerRow ? " win" : ""}"><span>${escapeHtml(label)}${dimmed ? " &middot; OUT" : ""}</span><b>${pl.score.toLocaleString("en-US")}</b></div>`;
   }).join("");
   screenEl.innerHTML = `
     <div class="screen-inner">
@@ -320,6 +425,8 @@ function hideScreen() {
 function refreshScreen() {
   if (screenKind === "menu") showMenu(menuCount);
   else if (screenKind === "waiting") showWaiting();
+  else if (screenKind === "netmenu") showNetMenu();
+  else if (screenKind === "lobby") showLobby();
 }
 
 /* ============================================================
