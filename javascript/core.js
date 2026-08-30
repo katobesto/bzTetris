@@ -219,7 +219,15 @@ function finalizeClearing(pl) {
   // online play (relayed by the server) AND local multiplayer (applied
   // directly to the target players on this machine).
   if (online || players.length > 1) {
-    const rivals = players.filter(p => p.slot !== pl.slot && p.alive).map(p => p.slot);
+    let rivals = players.filter(p => p.slot !== pl.slot && p.alive).map(p => p.slot);
+    if (online) {
+      // Only target slots that actually have a player in the room. Empty
+      // slots (spectators) are alive=true in the local mirror, but the server
+      // drops garbage aimed at them — so without this filter, most attacks in
+      // a 2- or 3-player online match would vanish into an empty slot.
+      const occupied = new Set(onlinePlayers.map(p => p.slot));
+      rivals = rivals.filter(s => occupied.has(s));
+    }
     let targets;
     if (n >= 4) targets = "all";
     else {
