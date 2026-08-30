@@ -31,13 +31,19 @@
     </div>
   </div>
 
+  <!-- Toggle button (top-left): show/hide the touch controls. The pad starts
+       hidden; the user taps this to reveal it (and to hide it again). -->
+  <button class="tp-toggle" id="tpToggle" aria-label="Mostrar controles táctiles">&#128313;</button>
+
   <!-- Touch controls: shown on touch devices during play (and the pause button).
        Wired up in input.js (touchpad.js logic lives there). Hidden by default. -->
   <div class="touchpad hidden" id="touchpad">
     <div class="tp-dpad">
-      <button class="tp-btn tp-left"  data-act="left"  aria-label="Izquierda">&#9664;</button>
-      <button class="tp-btn tp-down"  data-act="down"  aria-label="Abajo">&#9660;</button>
-      <button class="tp-btn tp-right" data-act="right" aria-label="Derecha">&#9654;</button>
+      <div class="tp-dpad-row">
+        <button class="tp-btn tp-left"  data-act="left"  aria-label="Izquierda">&#9664;</button>
+        <button class="tp-btn tp-right" data-act="right" aria-label="Derecha">&#9654;</button>
+      </div>
+      <button class="tp-btn tp-down" data-act="down" aria-label="Abajo">&#9660;</button>
     </div>
     <div class="tp-actions">
       <button class="tp-btn tp-ccw"  data-act="rotateCCW" aria-label="Girar antihorario">&#8634;</button>

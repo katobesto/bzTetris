@@ -61,33 +61,54 @@ const dom = new JSDOM(html, {
 const { window } = dom;
 const { document } = window;
 
-// ---- 1. boardCellScale behavior ----
+// ---- 1. boardCellScale behavior (based on VISIBLE height, not width) ----
+// iPhone 14 portrait (390x844): board (540px) fits -> no shrink.
 const s2 = window.eval("boardCellScale(2)");
-ok(s2 < 1, `boardCellScale(2) on 390x844 = ${s2.toFixed(3)} < 1 (board shrinks)`);
+ok(s2 === 1, `boardCellScale(2) on 390x844 = ${s2} (fits, no shrink)`);
 const s4 = window.eval("boardCellScale(4)");
 ok(s4 === 1, `boardCellScale(4) on 390x844 = ${s4} (fits, no shrink)`);
 
-// Small phone 360x640: strong shrink
+// Small phone 360x640: visible height too short -> shrink.
 Object.defineProperty(window, "innerWidth", { value: 360, configurable: true });
 Object.defineProperty(window, "innerHeight", { value: 640, configurable: true });
 const s2small = window.eval("boardCellScale(2)");
-ok(s2small < 0.7, `boardCellScale(2) on 360x640 = ${s2small.toFixed(3)} < 0.7 (strong shrink)`);
+ok(s2small < 1, `boardCellScale(2) on 360x640 = ${s2small.toFixed(3)} < 1 (shrinks)`);
 
-// Desktop: no shrink
+// Tablet in LANDSCAPE (1024x768) with OS bars eating the visible area:
+// window.innerHeight is 768 but visualViewport reports only 640 visible.
+// The old width-based check (>700 => no shrink) missed exactly this case.
+Object.defineProperty(window, "innerWidth", { value: 1024, configurable: true });
+Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+window.visualViewport = { width: 1024, height: 640 };
+const sTab = window.eval("boardCellScale(2)");
+ok(sTab < 1, `boardCellScale(2) on 1024x768 tablet (640 visible) = ${sTab.toFixed(3)} < 1 (fits visible area)`);
+// Without the OS bars (full 768 visible) the board fits -> no shrink.
+window.visualViewport = { width: 1024, height: 768 };
+const sTabFull = window.eval("boardCellScale(2)");
+ok(sTabFull === 1, `boardCellScale(2) on 1024x768 tablet (full) = ${sTabFull} (fits)`);
+
+// Desktop: no shrink.
 Object.defineProperty(window, "innerWidth", { value: 1920, configurable: true });
 Object.defineProperty(window, "innerHeight", { value: 1080, configurable: true });
+window.visualViewport = null;
 const sDesk = window.eval("boardCellScale(2)");
 ok(sDesk === 1, `boardCellScale(2) on desktop = ${sDesk} (no shrink)`);
 
-// Back to mobile for the buildColumns check
-Object.defineProperty(window, "innerWidth", { value: 390, configurable: true });
-Object.defineProperty(window, "innerHeight", { value: 844, configurable: true });
+// 80% zoom when the pad is open (small phone).
+Object.defineProperty(window, "innerWidth", { value: 360, configurable: true });
+Object.defineProperty(window, "innerHeight", { value: 640, configurable: true });
+window.visualViewport = null;
+document.body.classList.add("pad-open");
+const sPad = window.eval("boardCellScale(2)");
+document.body.classList.remove("pad-open");
+const sNoPad = window.eval("boardCellScale(2)");
+ok(sPad < sNoPad, `pad-open zoom: ${sPad.toFixed(3)} < ${sNoPad.toFixed(3)} (80% zoom applied)`);
 
-// ---- 2. buildColumns produces smaller canvases on mobile ----
+// ---- 2. buildColumns produces smaller canvases when the board must shrink ----
 window.eval("buildColumns(2)");
 const boardW = document.getElementById("board-0").width;
 const boardH = document.getElementById("board-0").height;
-// dpr=1 in jsdom. Mobile 2P: cell = floor(27 * 0.97) = 26 -> 260x520. Desktop: 270x540.
+// 360x640: scale ~0.93 -> cell 25 -> 250x500 (desktop would be 270x540).
 ok(boardW < 270, `mobile board width ${boardW} < desktop 270 (scaled down)`);
 ok(boardH < 540, `mobile board height ${boardH} < desktop 540 (scaled down)`);
 ok(boardH >= 240, `mobile board height ${boardH} >= 240 (still playable)`);
@@ -105,13 +126,18 @@ try {
 window.Event.prototype.preventDefault = origPrevent;
 ok(prevented >= 2, `zoom prevention: gesturestart+dblclick prevented (${prevented} calls)`);
 
-// ---- 4. CSS: D-pad is a flex row (no absolute positioning) ----
-ok(/\.tp-dpad \{ display: flex; gap: 8px; \}/.test(css), "CSS: .tp-dpad is a flex row (no overlap)");
+// ---- 4. CSS: D-pad = [left][right] row with [down] below; toggle top-left ----
+ok(/\.tp-dpad \{ display: flex; flex-direction: column; align-items: center; gap: 8px; \}/.test(css), "CSS: .tp-dpad is a centered column (row + down below)");
+ok(/\.tp-dpad-row \{ display: flex; gap: 8px; \}/.test(css), "CSS: .tp-dpad-row holds left+right side by side");
 ok(!/\.tp-dpad \.tp-left\s*\{[^}]*position: absolute/.test(css), "CSS: .tp-left NOT absolutely positioned");
 ok(!/\.tp-dpad \.tp-right\s*\{[^}]*position: absolute/.test(css), "CSS: .tp-right NOT absolutely positioned");
+ok(/\.tp-toggle \{/.test(css) && /left: 10px/.test(css), "CSS: .tp-toggle exists, top-left");
+ok(/body\.tp-on-touch \.tp-toggle \{ display: block; \}/.test(css), "CSS: toggle only shown on touch devices");
 ok(/touch-action: manipulation/.test(css), "CSS: body has touch-action: manipulation");
 ok(/min-height: 100dvh/.test(css), "CSS: mobile uses 100dvh (address bar aware)");
 ok(/user-scalable=no/.test(html), "HTML: viewport has user-scalable=no");
+ok(/id="tpToggle"/.test(html), "HTML: toggle button in markup");
+ok(/tp-dpad-row/.test(html), "HTML: D-pad row (left+right) in markup");
 
 console.log(`\nRESULT: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

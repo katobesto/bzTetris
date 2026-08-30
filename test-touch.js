@@ -96,7 +96,9 @@ setTimeout(() => {
     ok(G("players[0].ready") === true, "tapping joinBtn-0 marks slot 0 ready");
   }
 
-  // 8. Start the match (all ready) -> countdown -> playing, then check touchpad visibility
+  // 8. Start the match (all ready) -> countdown -> playing, then check touchpad
+  //    visibility: hidden by default, shown via the top-left toggle, and the
+  //    board zooms to 80% while the pad is open.
   G("players.forEach(p => p.ready = true); startMatch();");
   // Let the loop run a few frames to transition countdown -> playing
   setTimeout(() => {
@@ -105,8 +107,29 @@ setTimeout(() => {
     // Force into PLAYING to test pad visibility logic directly
     G("state = 'playing'");
     G("updateTouchpad()");
-    ok(!tp.classList.contains("hidden"), "touchpad visible during PLAYING");
-    // And hidden again when we leave play
+    ok(tp.classList.contains("hidden"), "touchpad hidden by default during PLAYING");
+    ok(!dom.window.document.body.classList.contains("pad-open"), "no pad-open zoom while pad hidden");
+
+    // 8b. Toggle button exists (top-left) and shows the pad
+    const toggle = doc.getElementById("tpToggle");
+    ok(!!toggle, "toggle button exists (top-left)");
+    if (toggle) {
+      toggle.dispatchEvent(new dom.window.Event("pointerdown", { bubbles: true }));
+      G("updateTouchpad()");
+      ok(!tp.classList.contains("hidden"), "touchpad visible after toggle (PLAYING)");
+      ok(dom.window.document.body.classList.contains("pad-open"), "body.pad-open set -> 80% zoom");
+      // Board scale must be smaller with the pad open than with it closed
+      const scaleOpen = G("boardCellScale(players.length)");
+      toggle.dispatchEvent(new dom.window.Event("pointerdown", { bubbles: true }));
+      G("updateTouchpad()");
+      const scaleClosed = G("boardCellScale(players.length)");
+      ok(scaleOpen < scaleClosed, "board zooms to 80% with pad open (" + scaleOpen + " < " + scaleClosed + ")");
+      ok(tp.classList.contains("hidden"), "touchpad hidden again after second toggle");
+      // Re-open for the pointer-event checks below
+      toggle.dispatchEvent(new dom.window.Event("pointerdown", { bubbles: true }));
+      G("updateTouchpad()");
+    }
+    // And hidden again when we leave play (even if the user had it on)
     G("state = 'menu'");
     G("updateTouchpad()");
     ok(tp.classList.contains("hidden"), "touchpad hidden back in MENU");

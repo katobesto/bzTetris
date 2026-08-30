@@ -100,9 +100,13 @@ requestAnimationFrame(frame);
  * (rotation, or the browser address bar showing/hiding). Only rebuilds
  * when the computed scale actually changes, so it's cheap.
  * ============================================================ */
-window.addEventListener("resize", () => {
+function onViewportResize() {
   const s = boardCellScale(players.length);
   if (Math.abs(s - lastBoardScale) < 0.01) return;
   lastBoardScale = s;
   buildColumns(players.length);
-});
+}
+window.addEventListener("resize", onViewportResize);
+// visualViewport fires when the address bar / OS bars change the visible
+// area (tablets in landscape) without a window resize.
+if (window.visualViewport) window.visualViewport.addEventListener("resize", onViewportResize);

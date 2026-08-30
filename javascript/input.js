@@ -287,20 +287,42 @@ window.addEventListener("keyup", (e) => {
  * ============================================================ */
 const isTouchDevice = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
 const touchpadEl = document.getElementById("touchpad");
-let touchpadVisible = false;
+const toggleEl = document.getElementById("tpToggle");
+let touchpadVisible = false;   // actual on-screen state
+let padUserVisible = false;    // user preference (toggle). Hidden by default.
+
+if (isTouchDevice) document.body.classList.add("tp-on-touch");
 
 function touchSlot() { return online ? mySlot : 0; }
 
-// Show the pad only while playing on a touch device (menus have their own buttons).
-function updateTouchpad() {
-  const want = isTouchDevice && state === State.PLAYING;
+// The pad is shown only while playing on a touch device AND the user has
+// toggled it on. When it becomes visible, body gets .pad-open so the board
+// zooms to 80% (boardCellScale) to leave room for the controls.
+function setPadVisible(want) {
   if (want === touchpadVisible) return;
   touchpadVisible = want;
   if (touchpadEl) touchpadEl.classList.toggle("hidden", !want);
+  document.body.classList.toggle("pad-open", want);
   if (!want) { // release any held directions so they don't leak into the next match
     const s = touchSlot();
     for (const d of ["left", "right", "down"]) releaseDir(s, d);
   }
+  // Rebuild the board so the 80% zoom (or full size) is applied.
+  if (typeof buildColumns === "function") buildColumns(players.length);
+}
+
+function updateTouchpad() {
+  setPadVisible(isTouchDevice && state === State.PLAYING && padUserVisible);
+}
+
+// Top-left toggle button: show/hide the touch controls.
+if (toggleEl && isTouchDevice) {
+  toggleEl.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    padUserVisible = !padUserVisible;
+    updateTouchpad();
+  });
+  toggleEl.addEventListener("contextmenu", (e) => e.preventDefault());
 }
 
 if (touchpadEl && isTouchDevice) {

@@ -26,14 +26,31 @@ const MINI_BY_COUNT = { 1: 19, 2: 17, 3: 15, 4: 13 };
 const SLOT_H_BY_COUNT = { 1: 64, 2: 58, 3: 52, 4: 48 };
 const MINI_W_BY_COUNT = { 1: 96, 2: 88, 3: 80, 4: 72 };
 
-// On narrow (mobile) viewports, shrink the board so the touch pad, the
-// browser address bar and the safe areas all fit without scrolling.
-// Returns a 0..1 scale factor for the given player count.
+// Visible viewport: the area actually on screen. On tablets in landscape the
+// browser chrome / OS bars eat into window.innerHeight, so the game area can
+// spill below the visible region. visualViewport reports the real visible
+// size (and updates when the address bar shows/hides); fall back to window.
+function visibleViewport() {
+  const vv = window.visualViewport;
+  if (vv && vv.height > 0) return { w: vv.width, h: vv.height };
+  return { w: window.innerWidth, h: window.innerHeight };
+}
+
+// Scale factor for the board so it fits the visible viewport.
+//  - Uses the visible viewport (not window.innerHeight) so the board fits on
+//    tablets in landscape where the OS bars / browser chrome shrink the
+//    visible area (a landscape tablet is wide, so a width-based check would
+//    miss it — the constraint is the short visible height).
+//  - When the touch pad is open (body.pad-open) the game area is zoomed to
+//    80% to leave room for the controls at the bottom.
+//  - Returns 1 (no shrink) whenever the board already fits.
 function boardCellScale(n) {
-  if (window.innerWidth > 700) return 1;
   const base = CELL_BY_COUNT[n] || 21;
-  const reserve = 320; // title + stats + touch pad + safe-area + margin
-  const avail = Math.max(200, window.innerHeight - reserve);
+  const { h } = visibleViewport();
+  const padOpen = document.body.classList.contains("pad-open");
+  const zoom = padOpen ? 0.8 : 1; // 80% zoom when the pad is shown
+  const reserve = padOpen ? 290 : 140; // title + stats + header (+ pad when open)
+  const avail = Math.max(160, (h - reserve) * zoom);
   return Math.min(1, avail / (ROWS * base));
 }
 let lastBoardScale = 0;

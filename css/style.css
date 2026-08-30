@@ -333,8 +333,34 @@ body {
 .me-tag { color: #00e5ff; font-size: 11px; }
 
 /* ============================================================
- * TOUCH CONTROLS (on-screen pad, shown on touch devices in play)
+ * TOUCH CONTROLS (on-screen pad, toggled by the top-left button)
  * ============================================================ */
+/* Toggle button, top-left: shows/hides the touch controls. */
+.tp-toggle {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top));
+  left: 10px;
+  z-index: 61;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  font-size: 20px;
+  color: #e8ecf4;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+.tp-toggle:active { background: rgba(0, 229, 255, 0.28); transform: scale(0.96); }
+/* Only shown on touch devices (input.js adds .tp-on-touch to <body>). */
+.tp-toggle { display: none; }
+body.tp-on-touch .tp-toggle { display: block; }
+
 .touchpad {
   position: fixed;
   inset: auto 0 0 0;
@@ -348,11 +374,10 @@ body {
 .touchpad.hidden { display: none; }
 
 .tp-dpad, .tp-actions { pointer-events: auto; }
-/* D-pad: horizontal row [left][down][right] — no overlap, and the whole
-   row sits on the bottom (lower than the old U-shape where left/right were
-   vertically centered and collided with the down button). */
-.tp-dpad { display: flex; gap: 8px; }
-/* Actions: clean 2x2 grid [ccw][cw] / [hold][drop]. */
+/* D-pad: [left][right] side by side, with [down] centered directly below. */
+.tp-dpad { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.tp-dpad-row { display: flex; gap: 8px; }
+/* Actions: clean 2x2 grid [ccw][cw] / [drop][hold]. */
 .tp-actions {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -395,10 +420,12 @@ body {
 @media (max-width: 700px) {
   body { overflow: auto; }
   /* Use dynamic viewport height so the address bar (iOS/Android) doesn't
-     push the game off-screen; the board is also scaled down (see
-     mobileCellScale in render.js) to leave room for the touch pad. */
+     push the game off-screen. The board is scaled to the visible viewport
+     (visibleViewport in render.js); when the touch pad is shown the board
+     is zoomed to 80% (body.pad-open) to leave room for it. */
   body { min-height: 100dvh; }
-  .app { gap: 8px; padding-bottom: 190px; } /* room for the touch pad */
+  .app { gap: 8px; }
+  body.pad-open .app { padding-bottom: 190px; } /* room for the touch pad */
   .title { font-size: 22px; letter-spacing: 8px; }
   .game-row { gap: 8px; }
   .player-col { padding: 6px; border-radius: 10px; }
@@ -409,10 +436,12 @@ body {
   .screen-title { font-size: 26px; letter-spacing: 5px; }
   .menu-count { font-size: 56px; }
   .btn { padding: 12px 22px; font-size: 14px; }
-  /* Touch pad: smaller buttons, D-pad row + 2x2 actions, no overlap. */
+  /* Touch pad: smaller buttons. D-pad = [left][right] on top, [down] below. */
   .tp-btn { width: 58px; height: 58px; font-size: 20px; border-radius: 14px; }
   .tp-dpad { gap: 8px; }
+  .tp-dpad-row { gap: 8px; }
   .tp-actions { gap: 8px; }
   .touchpad { padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); }
   .tp-pause { width: 46px; height: 46px; font-size: 16px; }
+  .tp-toggle { width: 42px; height: 42px; font-size: 18px; }
 }
